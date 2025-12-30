@@ -404,40 +404,20 @@ func (cma *ContractManagerActor) handleDeployContract(context actor.Context, msg
 		return
 	}
 
-	// Create new contract instance
-	contract := &Contract{
-		ID:           uuid.New(),
-		Address:      cma.generateContractAddress(),
-		Name:         msg.Name,
-		Type:         msg.Type,
-		Status:       ContractStatusDeploying,
-		Owner:        msg.Owner,
-		Version:      "1.0.0",
-		SourceCode:   msg.SourceCode,
-		TimeAware:    msg.TimeAware,
-		HistoryDepth: msg.HistoryDepth,
-		DNA: ContractDNA{
-			Generation: 0,
-			Fitness:    1.0,
-			Genes:      make([]Gene, 0),
-		},
-		Memory: ContractMemory{
-			ShortTerm:   make(map[string]interface{}),
-			LongTerm:    make(map[string]interface{}),
-			Patterns:    make([]MemoryPattern, 0),
-			Experiences: make([]Experience, 0),
-		},
-		Behavior: ContractBehavior{
-			Traits:         make([]BehaviorTrait, 0),
-			Adaptations:    make([]Adaptation, 0),
-			Collaborations: make([]Collaboration, 0),
-			Predictions:    make([]Prediction, 0),
-		},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
+	// Create new contract instance with consistent initialization
+	contract := NewContractBase(
+		uuid.New(),
+		cma.generateContractAddress(),
+		msg.Name,
+		msg.Type,
+		msg.Owner,
+	)
 
-	// Compile contract if source code provided
+	// Set deployment-specific fields
+	contract.SourceCode = msg.SourceCode
+	contract.TimeAware = msg.TimeAware
+	contract.HistoryDepth = msg.HistoryDepth
+
 	if msg.SourceCode != "" {
 		err := cma.compileContract(contract)
 		if err != nil {

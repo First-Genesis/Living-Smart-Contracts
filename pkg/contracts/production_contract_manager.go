@@ -33,35 +33,19 @@ func (pcm *ProductionContractManager) DeployContract(deployMsg *DeployContract) 
 	pcm.mutex.Lock()
 	defer pcm.mutex.Unlock()
 
-	// Create new contract with full initialization
-	contract := &Contract{
-		ID:           uuid.New(),
-		Address:      "contract_" + uuid.New().String()[:8],
-		Name:         deployMsg.Name,
-		Type:         deployMsg.Type,
-		Status:       ContractStatusDeploying,
-		Owner:        deployMsg.Owner,
-		Version:      "1.0.0",
-		SourceCode:   deployMsg.SourceCode,
-		TimeAware:    deployMsg.TimeAware,
-		HistoryDepth: deployMsg.HistoryDepth,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		LastActive:   time.Now(),
-		SuccessRate:  1.0,
-		DNA: ContractDNA{
-			Generation: 0,
-			Fitness:    1.0,
-			Mutations:  make([]Mutation, 0),
-		},
-		Memory: ContractMemory{
-			Experiences: make([]Experience, 0),
-			Patterns:    make([]MemoryPattern, 0),
-		},
-		Behavior: ContractBehavior{
-			Traits: make([]BehaviorTrait, 0),
-		},
-	}
+	// Create new contract with consistent initialization
+	contract := NewContractBase(
+		uuid.New(),
+		"contract_"+uuid.New().String()[:8],
+		deployMsg.Name,
+		deployMsg.Type,
+		deployMsg.Owner,
+	)
+
+	// Set deployment-specific fields
+	contract.SourceCode = deployMsg.SourceCode
+	contract.TimeAware = deployMsg.TimeAware
+	contract.HistoryDepth = deployMsg.HistoryDepth
 
 	// Create and start contract actor with named spawn
 	contractActor := NewProductionContractActor(contract)
