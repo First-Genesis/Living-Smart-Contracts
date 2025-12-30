@@ -354,6 +354,8 @@ func (cma *ContractManagerActor) Receive(context actor.Context) {
 		cma.performEcosystemMonitoring()
 	case *ContractStatusUpdate:
 		cma.handleContractStatusUpdate(msg)
+	case *ContractSummaryUpdate:
+		cma.handleContractSummaryUpdate(msg)
 	default:
 		log.Printf("ContractManager: Unknown message type: %T", msg)
 	}
@@ -672,10 +674,34 @@ func (cma *ContractManagerActor) updateCollaborationNetwork()                   
 
 // handleContractStatusUpdate updates contract status in manager's summary
 func (cma *ContractManagerActor) handleContractStatusUpdate(msg *ContractStatusUpdate) {
-	if c, ok := cma.contractDefinitions[msg.Address]; ok {
+	if c, ok := cma.contractDefinitions[msg.ContractAddress]; ok {
 		c.Status = msg.Status
 		c.UpdatedAt = msg.UpdatedAt
-		log.Printf("🔄 Updated contract %s status to %s", msg.Address, msg.Status)
+		log.Printf("🔄 Updated contract %s status to %s", msg.ContractAddress, msg.Status)
+	}
+	if c, ok := cma.registry.Contracts[msg.ContractAddress]; ok {
+		c.Status = msg.Status
+		c.UpdatedAt = msg.UpdatedAt
+	}
+}
+
+// handleContractSummaryUpdate updates contract summary fields in manager
+func (cma *ContractManagerActor) handleContractSummaryUpdate(msg *ContractSummaryUpdate) {
+	if c, ok := cma.contractDefinitions[msg.ContractAddress]; ok {
+		if msg.Version != "" {
+			c.Version = msg.Version
+		}
+		if msg.Fitness != nil {
+			// Store fitness in contract DNA if available
+			c.DNA.Fitness = *msg.Fitness
+		}
+		c.UpdatedAt = msg.UpdatedAt
+	}
+	if c, ok := cma.registry.Contracts[msg.ContractAddress]; ok {
+		if msg.Version != "" {
+			c.Version = msg.Version
+		}
+		c.UpdatedAt = msg.UpdatedAt
 	}
 }
 

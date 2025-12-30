@@ -15,11 +15,23 @@ type HealthTick struct{}
 type PerfTick struct{}
 type EcosystemTick struct{}
 
-// ContractStatusUpdate message for contract status synchronization
+// ===== MANAGER INTERNAL MESSAGES =====
+
+// ContractStatusUpdate is emitted by a contract actor whenever its status changes.
+// Manager uses this to keep contractDefinitions/registry summaries current.
 type ContractStatusUpdate struct {
-	Address   string         `json:"address"`
-	Status    ContractStatus `json:"status"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	ContractAddress string         `json:"contract_address"`
+	Status          ContractStatus `json:"status"`
+	Reason          string         `json:"reason,omitempty"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+// ContractSummaryUpdate allows updating non-mutable summary fields without sharing pointers.
+type ContractSummaryUpdate struct {
+	ContractAddress string    `json:"contract_address"`
+	Version         string    `json:"version,omitempty"`
+	Fitness         *float64  `json:"fitness,omitempty"` // use pointer to distinguish "not set"
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // DeployContract message to deploy a new smart contract
