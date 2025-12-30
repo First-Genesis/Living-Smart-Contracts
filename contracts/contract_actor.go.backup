@@ -1,0 +1,964 @@
+package contracts
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/asynkron/protoactor-go/actor"
+	"github.com/google/uuid"
+)
+
+// ContractActor represents a living smart contract that can evolve and adapt
+type ContractActor struct {
+	contract        *Contract
+	runtime         *ContractRuntime
+	memory          *ContractMemory
+	subscriptions   map[uuid.UUID]*EventSubscription
+	collaborations  map[uuid.UUID]*ActiveCollaboration
+	predictions     map[uuid.UUID]*Prediction
+	experienceBuffer []*Experience
+	learningEngine   *LearningEngine
+	adaptationEngine *AdaptationEngine
+	temporalQueries  map[uuid.UUID]*TemporalQuery
+	// Performance monitoring
+	executionCount   int64
+	totalGasUsed     int64
+	successCount     int64
+	errorCount       int64
+	lastActive       time.Time
+	
+	// State management
+	stateMutex       sync.RWMutex
+	isDirty          bool
+	lastStateCommit  time.Time
+	
+	// Evolution tracking
+	evolutionInProgress bool
+	currentEvolution    *EvolutionProcess
+	
+	// Temporal capabilities
+	temporalQueries     map[uuid.UUID]*TemporalQuery
+	
+	// System references
+	registryPID      *actor.PID
+	eventStreamPID   *actor.PID
+	documentStorePID *actor.PID
+	ledgerPID        *actor.PID
+}
+
+// EventSubscription represents an active event subscription
+type EventSubscription struct {
+	ID             uuid.UUID
+	Pattern        json.RawMessage
+	Callback       string
+	FilterCriteria json.RawMessage
+	CreatedAt      time.Time
+	TriggerCount   int
+}
+
+// ActiveCollaboration represents an ongoing collaboration
+type ActiveCollaboration struct {
+	ID           uuid.UUID
+	PartnerPID   *actor.PID
+	Type         CollaborationType
+	Status       CollaborationStatus
+	Terms        json.RawMessage
+	StartTime    time.Time
+	LastActivity time.Time
+	BenefitScore float64
+}
+
+// EvolutionProcess tracks an ongoing evolution
+type EvolutionProcess struct {
+	ID            uuid.UUID
+	Type          EvolutionType
+	StartTime     time.Time
+	Parameters    json.RawMessage
+	Progress      float64
+	Changes       []string
+	FitnessScore  float64
+}
+
+// TemporalQuery represents an active temporal query
+type TemporalQuery struct {
+	ID         uuid.UUID
+	Query      json.RawMessage
+	StartBlock int64
+	EndBlock   int64
+	StartTime  time.Time
+	Results    []json.RawMessage
+}
+
+// NewContractActor creates a new living contract actor
+func NewContractActor(contract *Contract, registryPID, eventStreamPID, documentStorePID, ledgerPID *actor.PID) *ContractActor {
+	return &ContractActor{
+		contract:         contract,
+		runtime:          NewContractRuntime(contract),
+		memory:           &contract.Memory,
+		subscriptions:    make(map[uuid.UUID]*EventSubscription),
+		collaborations:   make(map[uuid.UUID]*ActiveCollaboration),
+		predictions:      make(map[uuid.UUID]*Prediction),
+		experienceBuffer: make([]*Experience, 0, 100), // Buffer last 100 experiences
+		learningEngine:   NewLearningEngine(contract),
+		adaptationEngine: NewAdaptationEngine(contract),
+		temporalQueries:  make(map[uuid.UUID]*TemporalQuery),
+		lastActive:       time.Now(),
+		registryPID:      registryPID,
+		eventStreamPID:   eventStreamPID,
+		documentStorePID: documentStorePID,
+		ledgerPID:        ledgerPID,
+	}
+}
+
+// Receive handles incoming messages for the contract actor
+func (ca *ContractActor) Receive(context actor.Context) {
+	switch msg := context.Message().(type) {
+	case *actor.Started:
+		ca.handleStarted(context)
+	case *actor.Stopping:
+		ca.handleStopping(context)
+	case *ExecuteContract:
+		ca.handleExecuteContract(context, msg)
+	case *WakeContract:
+		ca.handleWakeContract(context, msg)
+	case *SleepContract:
+		ca.handleSleepContract(context, msg)
+	case *TriggerEvolution:
+		ca.handleTriggerEvolution(context, msg)
+	case *ProposeCollaboration:
+		ca.handleProposeCollaboration(context, msg)
+	case *AcceptCollaboration:
+		ca.handleAcceptCollaboration(context, msg)
+	case *RejectCollaboration:
+		ca.handleRejectCollaboration(context, msg)
+	case *QueryHistory:
+		ca.handleQueryHistory(context, msg)
+	case *PredictFuture:
+		ca.handlePredictFuture(context, msg)
+	case *SubscribeToEvents:
+		ca.handleSubscribeToEvents(context, msg)
+	case *EventTriggered:
+		ca.handleEventTriggered(context, msg)
+	case *EmitEvent:
+		ca.handleEmitEvent(context, msg)
+	case *LearnFromExperience:
+		ca.handleLearnFromExperience(context, msg)
+	case *AnalyzeBehavior:
+		ca.handleAnalyzeBehavior(context, msg)
+	case *QueryContractState:
+		ca.handleQueryContractState(context, msg)
+	case *UpdateContractState:
+		ca.handleUpdateContractState(context, msg)
+	case *UpgradeContract:
+		ca.handleUpgradeContract(context, msg)
+	default:
+		log.Printf("ContractActor [%s]: Unknown message type: %T", ca.contract.Address, msg)
+	}
+}
+
+// handleStarted initializes the contract actor
+func (ca *ContractActor) handleStarted(context actor.Context) {
+	log.Printf("🧬 Living Contract started: %s (%s)", ca.contract.Name, ca.contract.Address)
+	
+	// Initialize the contract if it's newly deployed
+	if ca.contract.Status == ContractStatusDeploying {
+		ca.initializeContract(context)
+	}
+	
+	// Set up periodic tasks
+	ca.schedulePeriodicTasks(context)
+	
+	// If this is a temporal contract, start historical analysis
+	if ca.contract.TimeAware {
+		ca.startTemporalAnalysis(context)
+	}
+	
+	// Restore any existing collaborations
+	ca.restoreCollaborations(context)
+}
+
+// handleStopping performs cleanup when contract is stopping
+func (ca *ContractActor) handleStopping(context actor.Context) {
+	log.Printf("🧬 Living Contract stopping: %s (%s)", ca.contract.Name, ca.contract.Address)
+	
+	// Save current state
+	ca.commitState(context)
+	
+	// Clean up collaborations
+	ca.cleanupCollaborations(context)
+	
+	// Cancel any ongoing evolution
+	if ca.evolutionInProgress {
+		ca.cancelEvolution(context)
+	}
+}
+
+// handleExecuteContract executes a contract function
+func (ca *ContractActor) handleExecuteContract(context actor.Context, msg *ExecuteContract) {
+	ca.lastActive = time.Now()
+	ca.executionCount++
+	
+	// Wake up if sleeping
+	if ca.contract.Status == ContractStatusSleeping {
+		ca.wakeUp(context, "execution_requested")
+	}
+	
+	// Create execution context
+	execution := &ContractExecution{
+		ID:              uuid.New(),
+		ContractAddress: ca.contract.Address,
+		Function:        msg.Function,
+		Parameters:      msg.Parameters,
+		Caller:          msg.Caller,
+		GasLimit:        msg.GasLimit,
+		BlockHeight:     ca.getCurrentBlockHeight(context),
+		Timestamp:       time.Now(),
+		Status:          ExecutionStatusExecuting,
+	}
+	
+	startTime := time.Now()
+	
+	// Execute the contract function
+	result, events, stateChanges, gasUsed, err := ca.runtime.Execute(
+		msg.Function, 
+		msg.Parameters, 
+		msg.Caller, 
+		msg.GasLimit,
+		ca.memory,
+	)
+	
+	executionTime := time.Since(startTime)
+	
+	// Update execution results
+	execution.GasUsed = gasUsed
+	execution.ExecutionTime = executionTime
+	execution.Events = events
+	execution.StateChanges = stateChanges
+	
+	if err != nil {
+		execution.Status = ExecutionStatusFailed
+		execution.Error = err.Error()
+		ca.errorCount++
+		
+		// Learn from the failure
+		ca.learnFromFailure(context, execution, err)
+	} else {
+		execution.Status = ExecutionStatusCompleted
+		execution.Result = result
+		ca.successCount++
+		ca.totalGasUsed += gasUsed
+		
+		// Learn from the success
+		ca.learnFromSuccess(context, execution)
+	}
+	
+	// Update performance metrics
+	ca.updatePerformanceMetrics(execution)
+	
+	// Emit events if any were generated
+	for _, event := range events {
+		ca.emitContractEvent(context, &event)
+	}
+	
+	// Apply state changes
+	if len(stateChanges) > 0 {
+		ca.applyStateChanges(context, stateChanges)
+	}
+	
+	// Create learning experience
+	experience := &Experience{
+		ID:        uuid.New().String(),
+		Context:   msg.Parameters,
+		Action:    json.RawMessage(fmt.Sprintf(`{"function": "%s", "gas_limit": %d}`, msg.Function, msg.GasLimit)),
+		Result:    execution.Result,
+		Success:   err == nil,
+		Timestamp: time.Now(),
+	}
+	
+	ca.addExperience(experience)
+	
+	// Check for adaptation triggers
+	ca.checkAdaptationTriggers(context, execution)
+	
+	// Respond with execution results
+	context.Respond(&ContractExecuted{
+		Execution: execution,
+		Success:   err == nil,
+		Message:   fmt.Sprintf("Function %s executed successfully", msg.Function),
+		Error:     execution.Error,
+	})
+}
+
+// handleWakeContract wakes up a sleeping contract
+func (ca *ContractActor) handleWakeContract(context actor.Context, msg *WakeContract) {
+	if ca.contract.Status == ContractStatusSleeping {
+		ca.wakeUp(context, msg.Reason)
+		
+		context.Respond(&ContractAwake{
+			ContractAddress: ca.contract.Address,
+			Status:          ca.contract.Status,
+			Message:         fmt.Sprintf("Contract woken up due to: %s", msg.Reason),
+		})
+	} else {
+		context.Respond(&ContractAwake{
+			ContractAddress: ca.contract.Address,
+			Status:          ca.contract.Status,
+			Message:         "Contract is already awake",
+		})
+	}
+}
+
+// handleSleepContract puts the contract to sleep
+func (ca *ContractActor) handleSleepContract(context actor.Context, msg *SleepContract) {
+	if ca.contract.Status == ContractStatusActive {
+		ca.contract.Status = ContractStatusSleeping
+		
+		// Schedule wake up if duration is specified
+		if msg.Duration > 0 {
+			context.SetReceiveTimeout(msg.Duration)
+		}
+		
+		log.Printf("🧬 Contract %s going to sleep", ca.contract.Address)
+		
+		context.Respond(&ContractSleeping{
+			ContractAddress: ca.contract.Address,
+			Status:          ca.contract.Status,
+			WakeCondition:   msg.Condition,
+		})
+	}
+}
+
+// handleTriggerEvolution starts contract evolution
+func (ca *ContractActor) handleTriggerEvolution(context actor.Context, msg *TriggerEvolution) {
+	if ca.evolutionInProgress {
+		context.Respond(&EvolutionStarted{
+			ContractAddress: ca.contract.Address,
+			Success:         false,
+		})
+		return
+	}
+	
+	evolutionID := uuid.New()
+	
+	ca.currentEvolution = &EvolutionProcess{
+		ID:           evolutionID,
+		Type:         msg.EvolutionType,
+		StartTime:    time.Now(),
+		Parameters:   msg.Parameters,
+		Progress:     0.0,
+		Changes:      make([]string, 0),
+		FitnessScore: ca.calculateCurrentFitness(),
+	}
+	
+	ca.evolutionInProgress = true
+	ca.contract.Status = ContractStatusEvolving
+	
+	// Start evolution in background
+	go ca.performEvolution(context, msg.EvolutionType, msg.Parameters)
+	
+	context.Respond(&EvolutionStarted{
+		ContractAddress: ca.contract.Address,
+		EvolutionID:     evolutionID,
+		EstimatedTime:   ca.estimateEvolutionTime(msg.EvolutionType),
+		Success:         true,
+	})
+}
+
+// Helper methods for contract lifecycle
+
+func (ca *ContractActor) initializeContract(context actor.Context) {
+	log.Printf("🧬 Initializing contract: %s", ca.contract.Address)
+	
+	// Initialize memory structures
+	if ca.memory.ShortTerm == nil {
+		ca.memory.ShortTerm = make(map[string]interface{})
+	}
+	if ca.memory.LongTerm == nil {
+		ca.memory.LongTerm = make(map[string]interface{})
+	}
+	if ca.memory.Patterns == nil {
+		ca.memory.Patterns = make([]MemoryPattern, 0)
+	}
+	if ca.memory.Experiences == nil {
+		ca.memory.Experiences = make([]Experience, 0)
+	}
+	
+	// Set status to active
+	ca.contract.Status = ContractStatusActive
+	ca.contract.UpdatedAt = time.Now()
+	
+	// Initialize DNA if this is a morphic contract
+	if ca.contract.Type == ContractTypeMorphic {
+		ca.initializeDNA()
+	}
+	
+	log.Printf("🧬 Contract initialized successfully: %s", ca.contract.Address)
+}
+
+func (ca *ContractActor) schedulePeriodicTasks(context actor.Context) {
+	// Schedule state commits every 5 minutes
+	context.SetReceiveTimeout(5 * time.Minute)
+	
+	// Schedule behavior analysis every hour
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			if ca.contract.Status == ContractStatusActive {
+				ca.performBehaviorAnalysis(context)
+			}
+		}
+	}()
+}
+
+func (ca *ContractActor) wakeUp(context actor.Context, reason string) {
+	ca.contract.Status = ContractStatusActive
+	ca.lastActive = time.Now()
+	
+	log.Printf("🧬 Contract %s waking up: %s", ca.contract.Address, reason)
+	
+	// Clear any sleep timeout
+	context.CancelReceiveTimeout()
+	
+	// Perform wake-up analysis
+	ca.analyzeWakeUpContext(context, reason)
+}
+
+func (ca *ContractActor) addExperience(experience *Experience) {
+	ca.experienceBuffer = append(ca.experienceBuffer, experience)
+	
+	// Keep buffer size manageable
+	if len(ca.experienceBuffer) > 100 {
+		ca.experienceBuffer = ca.experienceBuffer[1:]
+	}
+	
+	// Add to long-term memory
+	ca.memory.Experiences = append(ca.memory.Experiences, *experience)
+	
+	// Trigger learning if we have enough experiences
+	if len(ca.experienceBuffer) >= 10 {
+		ca.triggerLearning()
+	}
+}
+
+// ===== MISSING TYPE DEFINITIONS =====
+
+// ActiveCollaboration represents an active collaboration between contracts
+type ActiveCollaboration struct {
+	ID              string                 `json:"id"`
+	PartnerAddress  string                 `json:"partner_address"`
+	Type            CollaborationType      `json:"type"`
+	Status          CollaborationStatus    `json:"status"`
+	ProposedAt      time.Time              `json:"proposed_at"`
+	ActivatedAt     *time.Time             `json:"activated_at,omitempty"`
+	RejectedAt      *time.Time             `json:"rejected_at,omitempty"`
+	RejectionReason string                 `json:"rejection_reason,omitempty"`
+	Terms           map[string]interface{} `json:"terms"`
+	Benefit         float64                `json:"benefit"`
+}
+
+// EventSubscription represents an event subscription
+type EventSubscription struct {
+	ID             int                    `json:"id"`
+	SubscriberPID  interface{}            `json:"subscriber_pid"` // actor.PID
+	EventTypes     []string               `json:"event_types"`
+	FilterCriteria map[string]interface{} `json:"filter_criteria"`
+	SubscribedAt   time.Time              `json:"subscribed_at"`
+}
+
+// Various response types
+type CollaborationResponse struct {
+	CollaborationID string    `json:"collaboration_id"`
+	Status         string    `json:"status"`
+	ResponseTime   time.Time `json:"response_time"`
+}
+
+type SubscriptionConfirmation struct {
+	SubscriptionID int       `json:"subscription_id"`
+	Status        string    `json:"status"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
+type FuturePrediction struct {
+	ContractAddress  string             `json:"contract_address"`
+	PredictionType   PredictionType     `json:"prediction_type"`
+	TimeHorizon      time.Duration      `json:"time_horizon"`
+	PredictedMetrics map[string]float64 `json:"predicted_metrics"`
+	ConfidenceScore  float64            `json:"confidence_score"`
+	GeneratedAt      time.Time          `json:"generated_at"`
+}
+
+type PredictionResult struct {
+	Prediction *FuturePrediction `json:"prediction"`
+	RequestID  string           `json:"request_id"`
+	Timestamp  time.Time        `json:"timestamp"`
+}
+
+type HistoryQueryResult struct {
+	ContractAddress string                `json:"contract_address"`
+	Executions     []*ContractExecution  `json:"executions"`
+	QueryTime      time.Time             `json:"query_time"`
+	TotalCount     int                   `json:"total_count"`
+}
+
+type AnalysisResult struct {
+	Analysis  *BehaviorAnalysis `json:"analysis"`
+	RequestID string           `json:"request_id"`
+	Timestamp time.Time        `json:"timestamp"`
+}
+
+type StateQueryResult struct {
+	ContractAddress string                 `json:"contract_address"`
+	StateData      map[string]interface{} `json:"state_data"`
+	QueryTime      time.Time              `json:"query_time"`
+}
+
+type StateUpdateResult struct {
+	Success        bool      `json:"success"`
+	UpdatesApplied int       `json:"updates_applied"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Error          string    `json:"error,omitempty"`
+}
+
+type UpgradeResult struct {
+	Success    bool      `json:"success"`
+	OldVersion string    `json:"old_version"`
+	NewVersion string    `json:"new_version"`
+	UpgradedAt time.Time `json:"upgraded_at"`
+	Error      string    `json:"error,omitempty"`
+}
+
+// Contract backup for upgrades
+type ContractBackup struct {
+	Version   string    `json:"version"`
+	Code      string    `json:"code"`
+	State     string    `json:"state"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func (ca *ContractActor) updatePerformanceMetrics(execution *ContractExecution) {
+	ca.contract.ExecutionCount++
+	
+	// Update average gas used
+	if ca.contract.ExecutionCount > 0 {
+		ca.contract.AverageGasUsed = (ca.contract.AverageGasUsed*(ca.contract.ExecutionCount-1) + execution.GasUsed) / ca.contract.ExecutionCount
+	}
+	
+	// Update success rate
+	ca.contract.SuccessRate = float64(ca.successCount) / float64(ca.executionCount)
+	
+	// Update adaptation score based on performance trends
+	ca.updateAdaptationScore()
+	
+	ca.contract.UpdatedAt = time.Now()
+	ca.isDirty = true
+}
+
+func (ca *ContractActor) commitState(context actor.Context) {
+	if !ca.isDirty {
+		return
+	}
+	
+	// Save contract state to document storage
+	ca.saveContractToDocumentStore(context)
+	
+	ca.lastStateCommit = time.Now()
+	ca.isDirty = false
+}
+
+// Placeholder methods to be implemented
+func (ca *ContractActor) getCurrentBlockHeight(context actor.Context) int64 { return 0 }
+func (ca *ContractActor) learnFromFailure(context actor.Context, execution *ContractExecution, err error) {}
+func (ca *ContractActor) learnFromSuccess(context actor.Context, execution *ContractExecution) {}
+func (ca *ContractActor) checkAdaptationTriggers(context actor.Context, execution *ContractExecution) {}
+func (ca *ContractActor) emitContractEvent(context actor.Context, event *ContractEvent) {}
+func (ca *ContractActor) applyStateChanges(context actor.Context, changes []StateChange) {}
+func (ca *ContractActor) startTemporalAnalysis(context actor.Context) {}
+func (ca *ContractActor) restoreCollaborations(context actor.Context) {}
+func (ca *ContractActor) cleanupCollaborations(context actor.Context) {}
+func (ca *ContractActor) cancelEvolution(context actor.Context) {}
+func (ca *ContractActor) performEvolution(context actor.Context, evolutionType EvolutionType, parameters json.RawMessage) {}
+func (ca *ContractActor) calculateCurrentFitness() float64 { return 0.0 }
+func (ca *ContractActor) estimateEvolutionTime(evolutionType EvolutionType) time.Duration { return time.Hour }
+func (ca *ContractActor) initializeDNA() {}
+func (ca *ContractActor) performBehaviorAnalysis(context actor.Context) {}
+func (ca *ContractActor) analyzeWakeUpContext(context actor.Context, reason string) {}
+func (ca *ContractActor) triggerLearning() {}
+func (ca *ContractActor) updateAdaptationScore() {}
+func (ca *ContractActor) saveContractToDocumentStore(context actor.Context) {}
+
+// Handler methods for all contract message types
+
+// handleProposeCollaboration handles collaboration proposal messages
+func (ca *ContractActor) handleProposeCollaboration(context actor.Context, msg *ProposeCollaboration) {
+	log.Printf("Contract %s: Received collaboration proposal from %s", ca.contract.Address, msg.ProposerAddress)
+	
+	collaboration := &Collaboration{
+		ID:              generateCollaborationID(),
+		ProposerAddress: msg.ProposerAddress,
+		TargetAddress:   ca.contract.Address,
+		ProposalType:    msg.CollaborationType,
+		Parameters:      msg.Parameters,
+		Status:          CollaborationStatusProposed,
+		ProposedAt:      time.Now(),
+	}
+	
+	ca.collaborations[collaboration.ID] = collaboration
+	
+	// Auto-accept if contract allows or respond with acceptance/rejection
+	if ca.shouldAutoAcceptCollaboration(collaboration) {
+		ca.acceptCollaboration(context, collaboration)
+	}
+	
+	// Send response to proposer
+	context.Send(context.Sender(), &CollaborationResponse{
+		CollaborationID: collaboration.ID,
+		Status:         collaboration.Status,
+		ResponseTime:   time.Now(),
+	})
+}
+
+// handleAcceptCollaboration handles collaboration acceptance
+func (ca *ContractActor) handleAcceptCollaboration(context actor.Context, msg *AcceptCollaboration) {
+	collaboration, exists := ca.collaborations[msg.CollaborationID]
+	if !exists {
+		log.Printf("Contract %s: Unknown collaboration ID: %s", ca.contract.Address, msg.CollaborationID)
+		return
+	}
+	
+	collaboration.Status = CollaborationStatusActive
+	collaboration.ActivatedAt = time.Now()
+	
+	log.Printf("Contract %s: Activated collaboration %s", ca.contract.Address, collaboration.ID)
+	ca.isDirty = true
+}
+
+// handleRejectCollaboration handles collaboration rejection
+func (ca *ContractActor) handleRejectCollaboration(context actor.Context, msg *RejectCollaboration) {
+	collaboration, exists := ca.collaborations[msg.CollaborationID]
+	if !exists {
+		log.Printf("Contract %s: Unknown collaboration ID: %s", ca.contract.Address, msg.CollaborationID)
+		return
+	}
+	
+	collaboration.Status = CollaborationStatusRejected
+	collaboration.RejectedAt = time.Now()
+	collaboration.RejectionReason = msg.Reason
+	
+	log.Printf("Contract %s: Rejected collaboration %s: %s", ca.contract.Address, collaboration.ID, msg.Reason)
+	ca.isDirty = true
+}
+
+// handleQueryHistory handles historical query requests
+func (ca *ContractActor) handleQueryHistory(context actor.Context, msg *QueryHistory) {
+	log.Printf("Contract %s: Querying history from %v to %v", ca.contract.Address, msg.StartTime, msg.EndTime)
+	
+	// Filter execution history by time range
+	var filteredHistory []*ContractExecution
+	for _, execution := range ca.executionHistory {
+		if execution.Timestamp.After(msg.StartTime) && execution.Timestamp.Before(msg.EndTime) {
+			filteredHistory = append(filteredHistory, execution)
+		}
+	}
+	
+	// Apply additional filters if specified
+	if msg.FilterType != "" {
+		var finalHistory []*ContractExecution
+		for _, execution := range filteredHistory {
+			if execution.FunctionName == msg.FilterType {
+				finalHistory = append(finalHistory, execution)
+			}
+		}
+		filteredHistory = finalHistory
+	}
+	
+	context.Send(context.Sender(), &HistoryQueryResult{
+		ContractAddress: ca.contract.Address,
+		Executions:     filteredHistory,
+		QueryTime:      time.Now(),
+		TotalCount:     len(filteredHistory),
+	})
+}
+
+// handlePredictFuture handles future prediction requests
+func (ca *ContractActor) handlePredictFuture(context actor.Context, msg *PredictFuture) {
+	log.Printf("Contract %s: Generating future predictions", ca.contract.Address)
+	
+	prediction := &FuturePrediction{
+		ContractAddress:    ca.contract.Address,
+		PredictionType:     msg.PredictionType,
+		TimeHorizon:       msg.TimeHorizon,
+		PredictedMetrics:  make(map[string]float64),
+		ConfidenceScore:   ca.calculatePredictionConfidence(),
+		GeneratedAt:       time.Now(),
+	}
+	
+	// Generate predictions based on historical data and contract behavior
+	prediction.PredictedMetrics["execution_frequency"] = ca.predictExecutionFrequency(msg.TimeHorizon)
+	prediction.PredictedMetrics["gas_usage"] = ca.predictGasUsage(msg.TimeHorizon)
+	prediction.PredictedMetrics["success_rate"] = ca.predictSuccessRate(msg.TimeHorizon)
+	prediction.PredictedMetrics["adaptation_score"] = ca.predictAdaptationScore(msg.TimeHorizon)
+	
+	context.Send(context.Sender(), &PredictionResult{
+		Prediction: prediction,
+		RequestID:  msg.RequestID,
+	})
+}
+
+// handleSubscribeToEvents handles event subscription requests
+func (ca *ContractActor) handleSubscribeToEvents(context actor.Context, msg *SubscribeToEvents) {
+	log.Printf("Contract %s: New event subscription from %s", ca.contract.Address, context.Sender().String())
+	
+	subscription := &EventSubscription{
+		SubscriberPID: context.Sender(),
+		EventTypes:    msg.EventTypes,
+		FilterCriteria: msg.FilterCriteria,
+		SubscribedAt:  time.Now(),
+	}
+	
+	ca.eventSubscriptions = append(ca.eventSubscriptions, subscription)
+	
+	context.Send(context.Sender(), &SubscriptionConfirmation{
+		SubscriptionID: len(ca.eventSubscriptions) - 1,
+		Status:        "confirmed",
+	})
+}
+
+// handleEventTriggered handles external event triggers
+func (ca *ContractActor) handleEventTriggered(context actor.Context, msg *EventTriggered) {
+	log.Printf("Contract %s: External event triggered: %s", ca.contract.Address, msg.EventType)
+	
+	// Process the event based on contract's reactive behavior
+	if ca.shouldReactToEvent(msg.EventType, msg.EventData) {
+		execution := &ContractExecution{
+			ID:           generateExecutionID(),
+			FunctionName: "onEventTriggered",
+			Timestamp:    time.Now(),
+			Trigger:      "external_event",
+			Parameters:   msg.EventData,
+		}
+		
+		ca.executeContractLogic(context, execution)
+	}
+	
+	// Notify event subscribers
+	ca.notifyEventSubscribers(msg)
+}
+
+// handleEmitEvent handles event emission from contracts
+func (ca *ContractActor) handleEmitEvent(context actor.Context, msg *EmitEvent) {
+	log.Printf("Contract %s: Emitting event: %s", ca.contract.Address, msg.EventType)
+	
+	event := &ContractEvent{
+		ContractAddress: ca.contract.Address,
+		EventType:      msg.EventType,
+		EventData:      msg.EventData,
+		EmittedAt:      time.Now(),
+		BlockHeight:    ca.getCurrentBlockHeight(context),
+	}
+	
+	// Add to contract's event history
+	ca.eventHistory = append(ca.eventHistory, event)
+	
+	// Notify all subscribers
+	ca.notifyEventSubscribers(&EventTriggered{
+		EventType: msg.EventType,
+		EventData: msg.EventData,
+		Source:    ca.contract.Address,
+	})
+	
+	// Emit to external event system if configured
+	ca.emitContractEvent(context, event)
+}
+
+// handleLearnFromExperience handles learning requests
+func (ca *ContractActor) handleLearnFromExperience(context actor.Context, msg *LearnFromExperience) {
+	log.Printf("Contract %s: Learning from experience data", ca.contract.Address)
+	
+	// Process experience data to improve contract behavior
+	for _, experience := range msg.ExperienceData {
+		ca.processExperience(experience)
+	}
+	
+	// Update learning metrics
+	ca.contract.LearningRate = ca.calculateLearningRate()
+	ca.contract.AdaptationScore = ca.calculateCurrentFitness()
+	
+	// Trigger behavior analysis if enough new experiences
+	if len(msg.ExperienceData) > 5 {
+		ca.performBehaviorAnalysis(context)
+	}
+	
+	ca.isDirty = true
+}
+
+// handleAnalyzeBehavior handles behavior analysis requests
+func (ca *ContractActor) handleAnalyzeBehavior(context actor.Context, msg *AnalyzeBehavior) {
+	log.Printf("Contract %s: Performing behavior analysis", ca.contract.Address)
+	
+	analysis := &BehaviorAnalysis{
+		ContractAddress: ca.contract.Address,
+		AnalysisType:   msg.AnalysisType,
+		TimeWindow:     msg.TimeWindow,
+		AnalyzedAt:     time.Now(),
+		Metrics:        make(map[string]float64),
+		Patterns:       make(map[string]interface{}),
+	}
+	
+	// Perform analysis based on execution history
+	analysis.Metrics["execution_efficiency"] = ca.calculateExecutionEfficiency()
+	analysis.Metrics["error_rate"] = ca.calculateErrorRate()
+	analysis.Metrics["adaptation_trend"] = ca.calculateAdaptationTrend()
+	
+	// Identify behavioral patterns
+	analysis.Patterns["peak_usage_times"] = ca.identifyPeakUsageTimes()
+	analysis.Patterns["common_error_patterns"] = ca.identifyErrorPatterns()
+	
+	context.Send(context.Sender(), &AnalysisResult{
+		Analysis:  analysis,
+		RequestID: msg.RequestID,
+	})
+}
+
+// handleQueryContractState handles contract state queries
+func (ca *ContractActor) handleQueryContractState(context actor.Context, msg *QueryContractState) {
+	log.Printf("Contract %s: State query for: %v", ca.contract.Address, msg.StateKeys)
+	
+	stateData := make(map[string]interface{})
+	
+	if len(msg.StateKeys) == 0 {
+		// Return full state if no specific keys requested
+		stateData["contract"] = ca.contract
+		stateData["execution_count"] = ca.executionCount
+		stateData["success_count"] = ca.successCount
+		stateData["collaborations"] = ca.collaborations
+	} else {
+		// Return only requested state keys
+		for _, key := range msg.StateKeys {
+			switch key {
+			case "contract":
+				stateData[key] = ca.contract
+			case "execution_count":
+				stateData[key] = ca.executionCount
+			case "success_count":
+				stateData[key] = ca.successCount
+			case "collaborations":
+				stateData[key] = ca.collaborations
+			case "execution_history":
+				stateData[key] = ca.executionHistory
+			case "event_history":
+				stateData[key] = ca.eventHistory
+			}
+		}
+	}
+	
+	context.Send(context.Sender(), &StateQueryResult{
+		ContractAddress: ca.contract.Address,
+		StateData:      stateData,
+		QueryTime:      time.Now(),
+	})
+}
+
+// handleUpdateContractState handles contract state updates
+func (ca *ContractActor) handleUpdateContractState(context actor.Context, msg *UpdateContractState) {
+	log.Printf("Contract %s: Updating state: %v", ca.contract.Address, msg.StateUpdates)
+	
+	updateCount := 0
+	for key, value := range msg.StateUpdates {
+		switch key {
+		case "name":
+			if name, ok := value.(string); ok {
+				ca.contract.Name = name
+				updateCount++
+			}
+		case "description":
+			if desc, ok := value.(string); ok {
+				ca.contract.Description = desc
+				updateCount++
+			}
+		case "tags":
+			if tags, ok := value.([]string); ok {
+				ca.contract.Tags = tags
+				updateCount++
+			}
+		case "time_aware":
+			if timeAware, ok := value.(bool); ok {
+				ca.contract.TimeAware = timeAware
+				updateCount++
+			}
+		case "learning_enabled":
+			if learningEnabled, ok := value.(bool); ok {
+				ca.contract.LearningEnabled = learningEnabled
+				updateCount++
+			}
+		}
+	}
+	
+	if updateCount > 0 {
+		ca.contract.UpdatedAt = time.Now()
+		ca.isDirty = true
+		
+		context.Send(context.Sender(), &StateUpdateResult{
+			Success:      true,
+			UpdatesApplied: updateCount,
+			UpdatedAt:    time.Now(),
+		})
+	} else {
+		context.Send(context.Sender(), &StateUpdateResult{
+			Success: false,
+			Error:   "No valid state updates provided",
+		})
+	}
+}
+
+// handleUpgradeContract handles contract upgrade requests
+func (ca *ContractActor) handleUpgradeContract(context actor.Context, msg *UpgradeContract) {
+	log.Printf("Contract %s: Upgrade requested to version %s", ca.contract.Address, msg.NewVersion)
+	
+	// Validate upgrade conditions
+	if !ca.canUpgrade(msg) {
+		context.Send(context.Sender(), &UpgradeResult{
+			Success: false,
+			Error:   "Upgrade conditions not met",
+		})
+		return
+	}
+	
+	// Perform backup before upgrade
+	backup := ca.createContractBackup()
+	
+	// Apply upgrade
+	oldVersion := ca.contract.Version
+	ca.contract.Version = msg.NewVersion
+	ca.contract.Code = msg.NewCode
+	ca.contract.UpdatedAt = time.Now()
+	
+	// Validate new code
+	if !ca.validateContractCode(msg.NewCode) {
+		// Rollback on validation failure
+		ca.restoreFromBackup(backup)
+		context.Send(context.Sender(), &UpgradeResult{
+			Success: false,
+			Error:   "New contract code validation failed",
+		})
+		return
+	}
+	
+	// Re-initialize with new code
+	ca.initializeContract(context)
+	ca.isDirty = true
+	
+	log.Printf("Contract %s: Successfully upgraded from %s to %s", ca.contract.Address, oldVersion, msg.NewVersion)
+	
+	context.Send(context.Sender(), &UpgradeResult{
+		Success:     true,
+		OldVersion:  oldVersion,
+		NewVersion:  msg.NewVersion,
+		UpgradedAt:  time.Now(),
+	})
+}
