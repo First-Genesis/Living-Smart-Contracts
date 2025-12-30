@@ -270,6 +270,9 @@ func (le *LearningEngine) LearnFromExperiences(experiences []*Experience) error 
 	// Optimize performance based on learned patterns
 	optimizations := le.optimizer.GenerateOptimizations(newPatterns, dataPoints)
 
+	// Apply optimizations to contract behavior
+	le.applyOptimizations(optimizations)
+
 	// Update contract memory with new experiences
 	for _, exp := range experiences {
 		le.contract.Memory.Experiences = append(le.contract.Memory.Experiences, *exp)
@@ -355,7 +358,7 @@ func (le *LearningEngine) PredictBehavior(predictionType PredictionType, ctx map
 	}
 
 	p := &Prediction{
-		ID:         fmt.Sprintf("pred_%d", time.Now().Unix()),
+		ID:         fmt.Sprintf("pred_%d", time.Now().UnixNano()),
 		Type:       predictionType,
 		Prediction: predictionResult,
 		Confidence: confidence,
@@ -395,7 +398,7 @@ func makePredictionCacheKey(predType PredictionType, ctx map[string]interface{},
 func cachedToPrediction(predictionType PredictionType, cached *CachedPrediction) *Prediction {
 	raw, _ := json.Marshal(cached.Prediction) // ensure valid JSON
 	return &Prediction{
-		ID:         fmt.Sprintf("cached_%d", time.Now().Unix()),
+		ID:         fmt.Sprintf("cached_%d", time.Now().UnixNano()),
 		Type:       predictionType,
 		Prediction: raw,
 		Confidence: cached.Confidence,
@@ -420,6 +423,7 @@ func trimExperiencesValue(exps []Experience, max int) []Experience {
 
 func (le *LearningEngine) experiencesToDataPoints(experiences []*Experience) []DataPoint {
 	out := make([]DataPoint, 0, len(experiences))
+	badContext, badAction, badResult := 0, 0, 0
 
 	for _, exp := range experiences {
 		var input map[string]interface{}
@@ -427,10 +431,15 @@ func (le *LearningEngine) experiencesToDataPoints(experiences []*Experience) []D
 		var result map[string]interface{}
 
 		if err := json.Unmarshal(exp.Context, &input); err != nil {
+			badContext++
 			continue
 		}
-		_ = json.Unmarshal(exp.Action, &actionCtx) // optional
-		_ = json.Unmarshal(exp.Result, &result)    // optional
+		if err := json.Unmarshal(exp.Action, &actionCtx); err != nil {
+			badAction++
+		}
+		if err := json.Unmarshal(exp.Result, &result); err != nil {
+			badResult++
+		}
 
 		dp := DataPoint{
 			Timestamp: exp.Timestamp,
@@ -440,15 +449,30 @@ func (le *LearningEngine) experiencesToDataPoints(experiences []*Experience) []D
 			Success:   exp.Success,
 		}
 
-		if v, ok := result["gas_used"].(float64); ok { // JSON numbers decode to float64
+		// Check multiple sources for gas usage and execution time
+		if v, ok := result["gas_used"].(float64); ok {
+			dp.GasUsed = int64(v)
+		} else if v, ok := actionCtx["gas_used"].(float64); ok {
+			dp.GasUsed = int64(v)
+		} else if v, ok := input["gas_used"].(float64); ok {
 			dp.GasUsed = int64(v)
 		}
+
 		if v, ok := result["execution_time_ms"].(float64); ok {
+			dp.ExecutionTime = time.Duration(v) * time.Millisecond
+		} else if v, ok := actionCtx["execution_time_ms"].(float64); ok {
+			dp.ExecutionTime = time.Duration(v) * time.Millisecond
+		} else if v, ok := input["execution_time_ms"].(float64); ok {
 			dp.ExecutionTime = time.Duration(v) * time.Millisecond
 		}
 
 		out = append(out, dp)
 	}
+
+	if badContext > 0 || badAction > 0 || badResult > 0 {
+		log.Printf("Learning decode failures: context=%d action=%d result=%d", badContext, badAction, badResult)
+	}
+
 	return out
 }
 
@@ -467,28 +491,22 @@ func (le *LearningEngine) applyOptimizations(optimizations []Optimization) {
 }
 
 func (ae *AdaptationEngine) canAdapt() bool {
-	now := time.Now()
-	oneHourAgo := now.Add(-time.Hour)
-
-	// Count recent adaptations
-	recentCount := 0
-	for _, adaptTime := range ae.recentAdaptations {
-		if adaptTime.After(oneHourAgo) {
-			recentCount++
-		}
-	}
-
-	return recentCount < ae.maxAdaptationsPerHour
+	return len(ae.recentAdaptations) < ae.maxAdaptationsPerHour
 }
 
 func (ae *AdaptationEngine) recordAdaptation() {
-	ae.totalAdaptations++
-	ae.recentAdaptations = append(ae.recentAdaptations, time.Now())
+	now := time.Now()
+	oneHourAgo := now.Add(-time.Hour)
 
-	// Keep only recent adaptations
-	if len(ae.recentAdaptations) > ae.maxAdaptationsPerHour*24 {
-		ae.recentAdaptations = ae.recentAdaptations[1:]
+	// prune
+	pruned := ae.recentAdaptations[:0]
+	for _, t := range ae.recentAdaptations {
+		if t.After(oneHourAgo) {
+			pruned = append(pruned, t)
+		}
 	}
+	ae.recentAdaptations = append(pruned, now)
+	ae.totalAdaptations++
 }
 
 func (le *LearningEngine) generatePrediction(model *PredictionModel, context map[string]interface{}, timeHorizon time.Duration) (json.RawMessage, float64, error) {
