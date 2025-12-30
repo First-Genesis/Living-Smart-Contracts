@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -269,16 +270,20 @@ func (le *LearningEngine) LearnFromExperiences(experiences []*Experience) error 
 	// Optimize performance based on learned patterns
 	optimizations := le.optimizer.GenerateOptimizations(newPatterns, dataPoints)
 
-	// Apply optimizations to contract memory
-	le.applyOptimizations(optimizations)
+	// Update contract memory with new experiences
+	for _, exp := range experiences {
+		le.contract.Memory.Experiences = append(le.contract.Memory.Experiences, *exp)
+	}
+
+	// Trim experiences to prevent unbounded memory growth
+	le.contract.Memory.Experiences = trimExperiencesValue(le.contract.Memory.Experiences, le.maxMemorySize)
 
 	// Update learning statistics
 	le.totalExperiences += len(experiences)
 	le.learningCycles++
 	le.lastLearningTime = time.Now()
 
-	log.Printf("🧠 Learning completed: discovered %d new patterns, generated %d optimizations",
-		len(newPatterns), len(optimizations))
+	log.Printf("🎯 Learning completed: discovered %d patterns, %d optimizations", len(newPatterns), len(optimizations))
 
 	return nil
 }
@@ -326,39 +331,30 @@ func (ae *AdaptationEngine) AdaptBehavior(environment *Environment) ([]*Adaptati
 }
 
 // PredictBehavior predicts future contract behavior
-func (le *LearningEngine) PredictBehavior(predictionType PredictionType, context map[string]interface{}, timeHorizon time.Duration) (*Prediction, error) {
-	le.mutex.RLock()
-	defer le.mutex.RUnlock()
-
-	// Check prediction cache
-	cacheKey := fmt.Sprintf("%s_%v_%v", predictionType, context, timeHorizon)
-	if cached, exists := le.predictor.predictionCache[cacheKey]; exists {
-		if time.Now().Before(cached.ValidUntil) {
-			return &Prediction{
-				ID:         fmt.Sprintf("cached_%d", time.Now().Unix()),
-				Type:       predictionType,
-				Prediction: json.RawMessage(fmt.Sprintf("%v", cached.Prediction)),
-				Confidence: cached.Confidence,
-				MadeAt:     cached.CreatedAt,
-				ValidUntil: cached.ValidUntil,
-			}, nil
-		}
+func (le *LearningEngine) PredictBehavior(predictionType PredictionType, ctx map[string]interface{}, timeHorizon time.Duration) (*Prediction, error) {
+	cacheKey, err := makePredictionCacheKey(predictionType, ctx, timeHorizon)
+	if err != nil {
+		return nil, err
 	}
 
-	// Get prediction model
+	le.mutex.RLock()
+	if cached, exists := le.predictor.predictionCache[cacheKey]; exists && time.Now().Before(cached.ValidUntil) {
+		le.mutex.RUnlock()
+		return cachedToPrediction(predictionType, cached), nil
+	}
 	model, exists := le.predictor.models[predictionType]
+	le.mutex.RUnlock()
+
 	if !exists {
 		return nil, fmt.Errorf("no prediction model for type: %s", predictionType)
 	}
 
-	// Generate prediction
-	predictionResult, confidence, err := le.generatePrediction(model, context, timeHorizon)
+	predictionResult, confidence, err := le.generatePrediction(model, ctx, timeHorizon)
 	if err != nil {
 		return nil, fmt.Errorf("prediction generation failed: %w", err)
 	}
 
-	// Create prediction object
-	prediction := &Prediction{
+	p := &Prediction{
 		ID:         fmt.Sprintf("pred_%d", time.Now().Unix()),
 		Type:       predictionType,
 		Prediction: predictionResult,
@@ -367,39 +363,93 @@ func (le *LearningEngine) PredictBehavior(predictionType PredictionType, context
 		ValidUntil: time.Now().Add(timeHorizon),
 	}
 
-	// Cache prediction
+	le.mutex.Lock()
 	le.predictor.predictionCache[cacheKey] = &CachedPrediction{
 		Prediction: predictionResult,
 		Confidence: confidence,
-		CreatedAt:  time.Now(),
-		ValidUntil: time.Now().Add(timeHorizon),
+		CreatedAt:  p.MadeAt,
+		ValidUntil: p.ValidUntil,
 	}
+	le.mutex.Unlock()
 
-	return prediction, nil
+	return p, nil
 }
 
 // Helper functions and implementations
 
+func makePredictionCacheKey(predType PredictionType, ctx map[string]interface{}, horizon time.Duration) (string, error) {
+	blob := map[string]interface{}{
+		"type":    predType,
+		"horizon": horizon.String(),
+		"context": ctx,
+	}
+	b, err := json.Marshal(blob) // stable ordering for maps in encoding/json is deterministic by key sorting
+	if err != nil {
+		return "", err
+	}
+	// hash to keep key small
+	sum := sha256.Sum256(b)
+	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+func cachedToPrediction(predictionType PredictionType, cached *CachedPrediction) *Prediction {
+	raw, _ := json.Marshal(cached.Prediction) // ensure valid JSON
+	return &Prediction{
+		ID:         fmt.Sprintf("cached_%d", time.Now().Unix()),
+		Type:       predictionType,
+		Prediction: raw,
+		Confidence: cached.Confidence,
+		MadeAt:     cached.CreatedAt,
+		ValidUntil: cached.ValidUntil,
+	}
+}
+
+func trimExperiences(exps []*Experience, max int) []*Experience {
+	if max <= 0 || len(exps) <= max {
+		return exps
+	}
+	return exps[len(exps)-max:]
+}
+
+func trimExperiencesValue(exps []Experience, max int) []Experience {
+	if max <= 0 || len(exps) <= max {
+		return exps
+	}
+	return exps[len(exps)-max:]
+}
+
 func (le *LearningEngine) experiencesToDataPoints(experiences []*Experience) []DataPoint {
-	dataPoints := make([]DataPoint, len(experiences))
+	out := make([]DataPoint, 0, len(experiences))
 
-	for i, exp := range experiences {
-		var input, output, context map[string]interface{}
+	for _, exp := range experiences {
+		var input map[string]interface{}
+		var actionCtx map[string]interface{}
+		var result map[string]interface{}
 
-		json.Unmarshal(exp.Context, &input)
-		json.Unmarshal(exp.Action, &context)
-		json.Unmarshal(exp.Result, &output)
+		if err := json.Unmarshal(exp.Context, &input); err != nil {
+			continue
+		}
+		_ = json.Unmarshal(exp.Action, &actionCtx) // optional
+		_ = json.Unmarshal(exp.Result, &result)    // optional
 
-		dataPoints[i] = DataPoint{
+		dp := DataPoint{
 			Timestamp: exp.Timestamp,
 			Input:     input,
-			Output:    output,
-			Context:   context,
+			Output:    result,
+			Context:   actionCtx,
 			Success:   exp.Success,
 		}
-	}
 
-	return dataPoints
+		if v, ok := result["gas_used"].(float64); ok { // JSON numbers decode to float64
+			dp.GasUsed = int64(v)
+		}
+		if v, ok := result["execution_time_ms"].(float64); ok {
+			dp.ExecutionTime = time.Duration(v) * time.Millisecond
+		}
+
+		out = append(out, dp)
+	}
+	return out
 }
 
 func (le *LearningEngine) applyOptimizations(optimizations []Optimization) {

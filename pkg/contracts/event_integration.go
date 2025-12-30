@@ -311,9 +311,6 @@ func (cei *ContractEventIntegrator) UnsubscribeFromEvents(subscriptionID uuid.UU
 
 // CreateContractEventSink creates a dedicated event sink for a contract
 func (cei *ContractEventIntegrator) CreateContractEventSink(contractAddress, sinkType string, configuration json.RawMessage) (*ContractEventSink, error) {
-	cei.mu.Lock()
-	defer cei.mu.Unlock()
-
 	sink := &ContractEventSink{
 		ID:              uuid.New(),
 		ContractAddress: contractAddress,
@@ -327,29 +324,38 @@ func (cei *ContractEventIntegrator) CreateContractEventSink(contractAddress, sin
 		LastActivity:    time.Now(),
 	}
 
+	cei.mu.Lock()
 	cei.contractEventSinks[contractAddress] = sink
+	cei.mu.Unlock()
 
-	// Create the actual sink in the event system
-	err := cei.createEventSystemSink(sink)
-	if err != nil {
+	if err := cei.createEventSystemSink(sink); err != nil {
+		// rollback on failure
+		cei.mu.Lock()
+		delete(cei.contractEventSinks, contractAddress)
+		cei.mu.Unlock()
 		return nil, fmt.Errorf("failed to create event system sink: %w", err)
 	}
 
 	log.Printf("📡 Created contract event sink: %s for contract %s", sinkType, contractAddress)
-
 	return sink, nil
 }
 
 // Helper methods
 
 func (cei *ContractEventIntegrator) sendToEventSystem(event *StandardContractEvent) error {
+	if cei.eventStreamPID == nil {
+		return fmt.Errorf("eventStreamPID is nil")
+	}
+
 	eventMessage := map[string]interface{}{
 		"type":      event.Type,
 		"source":    event.Source,
 		"data":      event, // avoid nested bytes
 		"timestamp": event.Time,
 	}
-	cei.system.Root.Send(cei.eventStreamPID, eventMessage)
+
+	root := cei.system.Root
+	root.Send(cei.eventStreamPID, eventMessage)
 	return nil
 }
 
@@ -369,6 +375,11 @@ func (cei *ContractEventIntegrator) triggerSubscriptions(event *StandardContract
 }
 
 func (cei *ContractEventIntegrator) triggerSubscription(subscription *ContractEventSubscription, event *StandardContractEvent) {
+	if cei.contractManager == nil {
+		log.Printf("Warning: contractManager PID is nil, cannot trigger subscription")
+		return
+	}
+
 	// Create event triggered message
 	triggeredMsg := &EventTriggered{
 		SubscriptionID:  subscription.ID,
@@ -380,7 +391,8 @@ func (cei *ContractEventIntegrator) triggerSubscription(subscription *ContractEv
 		Callback:        subscription.Callback,
 	}
 
-	cei.system.Root.Send(cei.contractManager, triggeredMsg)
+	root := cei.system.Root
+	root.Send(cei.contractManager, triggeredMsg)
 
 	cei.mu.Lock()
 	subscription.TriggerCount++
@@ -402,14 +414,7 @@ func (cei *ContractEventIntegrator) matchesEventPattern(event *StandardContractE
 		return false
 	}
 
-	// Match event type if specified
-	if eventType, ok := patternMap["type"].(string); ok {
-		if eventType != "*" && event.Type != eventType {
-			return false
-		}
-	}
-
-	// Support multiple types
+	// If "types" exists, ignore "type" (types has higher priority)
 	if types, ok := patternMap["types"].([]interface{}); ok {
 		matched := false
 		for _, t := range types {
@@ -421,10 +426,19 @@ func (cei *ContractEventIntegrator) matchesEventPattern(event *StandardContractE
 		if !matched {
 			return false
 		}
+	} else if eventType, ok := patternMap["type"].(string); ok {
+		if eventType != "*" && event.Type != eventType {
+			return false
+		}
 	}
 
 	// Match emitter contract address if specified
 	if emitterAddr, ok := patternMap["emitter_contract_address"].(string); ok {
+		if event.ContractAddress != emitterAddr {
+			return false
+		}
+	}
+	if emitterAddr, ok := patternMap["emitter"].(string); ok { // alias
 		if event.ContractAddress != emitterAddr {
 			return false
 		}
