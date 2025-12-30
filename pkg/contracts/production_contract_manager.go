@@ -36,7 +36,7 @@ func (pcm *ProductionContractManager) DeployContract(deployMsg *DeployContract) 
 	// Create new contract with full initialization
 	contract := &Contract{
 		ID:           uuid.New(),
-		Address:      "contract_" + uuid.New().String(),
+		Address:      "contract_" + uuid.New().String()[:8],
 		Name:         deployMsg.Name,
 		Type:         deployMsg.Type,
 		Status:       ContractStatusDeploying,
@@ -156,6 +156,15 @@ func (pcm *ProductionContractManager) WakeContract(address string) (*ContractAwa
 	if !ok {
 		return nil, fmt.Errorf("unexpected wake response type")
 	}
+
+	// Update summary status after successful wake
+	pcm.mutex.Lock()
+	if s, ok := pcm.contracts[address]; ok {
+		s.Status = msg.Status
+		s.UpdatedAt = time.Now()
+	}
+	pcm.mutex.Unlock()
+
 	return msg, nil
 }
 
@@ -177,6 +186,15 @@ func (pcm *ProductionContractManager) SleepContract(address string) (*ContractSl
 	if !ok {
 		return nil, fmt.Errorf("unexpected sleep response type")
 	}
+
+	// Update summary status after successful sleep
+	pcm.mutex.Lock()
+	if s, ok := pcm.contracts[address]; ok {
+		s.Status = msg.Status
+		s.UpdatedAt = time.Now()
+	}
+	pcm.mutex.Unlock()
+
 	return msg, nil
 }
 
@@ -188,16 +206,32 @@ func (pcm *ProductionContractManager) ExecuteContract(address string, execMsg *E
 	}
 
 	fut := pcm.actorSystem.Root.RequestFuture(pid, execMsg, 5*time.Second)
-	_, err = fut.Result()
+	res, err := fut.Result()
 	if err != nil {
 		return fmt.Errorf("execute contract failed: %w", err)
 	}
+
+	execRes, ok := res.(*ContractExecuted)
+	if !ok {
+		return fmt.Errorf("unexpected execute response type: %T", res)
+	}
+	if !execRes.Success {
+		return fmt.Errorf("execution failed: %s", execRes.Error)
+	}
+
+	// Update summary LastActive after successful execution
+	pcm.mutex.Lock()
+	if s, ok := pcm.contracts[address]; ok {
+		s.LastActive = time.Now()
+		s.UpdatedAt = time.Now()
+	}
+	pcm.mutex.Unlock()
 
 	log.Printf("⚡ Contract execution completed: %s.%s", address, execMsg.Function)
 	return nil
 }
 
-// StopContract stops a contract actor safely
+// StopContract stops a contract actor safely and archives the summary
 func (pcm *ProductionContractManager) StopContract(address string) error {
 	pcm.mutex.Lock()
 	defer pcm.mutex.Unlock()
@@ -210,17 +244,16 @@ func (pcm *ProductionContractManager) StopContract(address string) error {
 	// Stop the actor
 	pcm.actorSystem.Root.Stop(pid)
 
-	// Update summary status (not the actor's mutable state)
+	// Keep immutable summary, mark archived
 	if summary, ok := pcm.contracts[address]; ok {
-		summary.Status = ContractStatusDeploying // Use existing status
+		summary.Status = ContractStatusArchived
 		summary.UpdatedAt = time.Now()
 	}
 
-	// Remove from maps
+	// Remove only the actor PID, keep the archived summary
 	delete(pcm.contractActors, address)
-	delete(pcm.contracts, address)
 
-	log.Printf("🛑 Contract stopped: %s", address)
+	log.Printf("🛑 Contract stopped and archived: %s", address)
 	return nil
 }
 
@@ -242,9 +275,9 @@ func (pcm *ProductionContractManager) GetSystemStats() *SystemStatusResult {
 		}
 	}
 
-	systemHealth := float64(activeContracts) / float64(totalContracts)
-	if totalContracts == 0 {
-		systemHealth = 1.0
+	systemHealth := 1.0
+	if totalContracts > 0 {
+		systemHealth = float64(activeContracts) / float64(totalContracts)
 	}
 
 	return &SystemStatusResult{
