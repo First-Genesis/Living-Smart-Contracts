@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/asynkron/protoactor-go/actor"
@@ -25,6 +26,9 @@ type ContractStorageIntegrator struct {
 	// Caching and performance
 	stateCache   map[string]*CachedContractState
 	cacheManager *StateCacheManager
+
+	// Thread safety
+	mutex sync.RWMutex
 }
 
 // StateStorageManager handles contract state persistence
@@ -511,15 +515,19 @@ func (csi *ContractStorageIntegrator) executeTemporalQuery(query map[string]inte
 }
 
 func (csi *ContractStorageIntegrator) getCurrentBlockHeight() int64 {
+	// TODO: integrate with LedgerActor to fetch real block height
 	// Get current block height from ledger
 	// This would integrate with the LedgerActor
 	return 0
 }
 
+// getFromCache returns the cached state for the given contract.
+// NOTE: current implementation caches only the latest version per contract.
+// If version != nil and doesn't match the cached version, this is a miss.
 func (csi *ContractStorageIntegrator) getFromCache(contractAddress string, version *int64) *CachedContractState {
-	// getFromCache returns the cached state for the given contract.
-	// NOTE: current implementation caches only the latest version per contract.
-	// If version != nil and doesn't match the cached version, this is a miss.
+	csi.mutex.RLock()
+	defer csi.mutex.RUnlock()
+
 	if cached, exists := csi.stateCache[contractAddress]; exists {
 		if version == nil || cached.Version == *version {
 			if time.Now().Before(cached.ExpiresAt) {
@@ -531,6 +539,9 @@ func (csi *ContractStorageIntegrator) getFromCache(contractAddress string, versi
 }
 
 func (csi *ContractStorageIntegrator) updateStateCache(contractAddress string, state []byte, stateRoot string, version int64) {
+	csi.mutex.Lock()
+	defer csi.mutex.Unlock()
+
 	cached := &CachedContractState{
 		ContractAddress: contractAddress,
 		State:           state,
@@ -547,12 +558,15 @@ func (csi *ContractStorageIntegrator) updateStateCache(contractAddress string, s
 }
 
 func (csi *ContractStorageIntegrator) updateIndexes(stateDoc *ContractStateDocument) {
-	// Update temporal indexes
+	// TODO: update TimeIndex and VersionIndex for faster temporal queries.
 	// This would update the time and version indexes for faster queries
 }
 
 // nextStateVersion returns the next monotonic state version for a contract
 func (csi *ContractStorageIntegrator) nextStateVersion(contractAddress string) int64 {
+	csi.mutex.RLock()
+	defer csi.mutex.RUnlock()
+
 	// Look at cached state if present
 	if cached, ok := csi.stateCache[contractAddress]; ok {
 		return cached.Version + 1
@@ -563,18 +577,22 @@ func (csi *ContractStorageIntegrator) nextStateVersion(contractAddress string) i
 
 // updateStatsOnHit updates cache statistics on cache hit
 func (csi *ContractStorageIntegrator) updateStatsOnHit() {
+	csi.mutex.Lock()
+	defer csi.mutex.Unlock()
 	csi.cacheManager.cacheStats.Hits++
-	csi.recomputeHitRate()
+	csi.recomputeHitRateLocked()
 }
 
 // updateStatsOnMiss updates cache statistics on cache miss
 func (csi *ContractStorageIntegrator) updateStatsOnMiss() {
+	csi.mutex.Lock()
+	defer csi.mutex.Unlock()
 	csi.cacheManager.cacheStats.Misses++
-	csi.recomputeHitRate()
+	csi.recomputeHitRateLocked()
 }
 
-// recomputeHitRate recalculates cache hit rate
-func (csi *ContractStorageIntegrator) recomputeHitRate() {
+// recomputeHitRateLocked recalculates cache hit rate (caller must hold mutex)
+func (csi *ContractStorageIntegrator) recomputeHitRateLocked() {
 	total := csi.cacheManager.cacheStats.Hits + csi.cacheManager.cacheStats.Misses
 	if total == 0 {
 		csi.cacheManager.cacheStats.HitRate = 0
