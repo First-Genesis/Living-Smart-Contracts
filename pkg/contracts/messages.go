@@ -9,6 +9,12 @@ import (
 
 // ===== CONTRACT MANAGEMENT MESSAGES =====
 
+// Background task tick messages for actor-based scheduling
+type MaintenanceTick struct{}
+type HealthTick struct{}
+type PerfTick struct{}
+type EcosystemTick struct{}
+
 // DeployContract message to deploy a new smart contract
 type DeployContract struct {
 	Name         string          `json:"name"`
