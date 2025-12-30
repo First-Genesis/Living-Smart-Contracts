@@ -224,6 +224,10 @@ func (pcm *ProductionContractManager) ExecuteContract(address string, execMsg *E
 	if s, ok := pcm.contracts[address]; ok {
 		s.LastActive = time.Now()
 		s.UpdatedAt = time.Now()
+		// Promote from Deploying to Active on first successful execution
+		if s.Status == ContractStatusDeploying {
+			s.Status = ContractStatusActive
+		}
 	}
 	pcm.mutex.Unlock()
 
