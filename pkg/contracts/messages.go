@@ -15,6 +15,13 @@ type HealthTick struct{}
 type PerfTick struct{}
 type EcosystemTick struct{}
 
+// ContractStatusUpdate message for contract status synchronization
+type ContractStatusUpdate struct {
+	Address   string         `json:"address"`
+	Status    ContractStatus `json:"status"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
 // DeployContract message to deploy a new smart contract
 type DeployContract struct {
 	Name         string          `json:"name"`

@@ -37,7 +37,7 @@ type ContractManagerActor struct {
 
 	// Configuration
 	config *ManagerConfig
-	mutex  sync.RWMutex
+	// mutex removed - actor thread provides serialization
 
 	// Background tasks
 	maintenanceInterval time.Duration
@@ -352,6 +352,8 @@ func (cma *ContractManagerActor) Receive(context actor.Context) {
 		cma.performPerformanceAnalysis()
 	case *EcosystemTick:
 		cma.performEcosystemMonitoring()
+	case *ContractStatusUpdate:
+		cma.handleContractStatusUpdate(msg)
 	default:
 		log.Printf("ContractManager: Unknown message type: %T", msg)
 	}
@@ -461,9 +463,17 @@ func (cma *ContractManagerActor) handleDeployContract(context actor.Context, msg
 
 	// Create and start contract actor with its own copy
 	contractActor := NewProductionContractActor(contract)
-	contractPID, _ := context.SpawnNamed(actor.PropsFromProducer(func() actor.Actor {
+	contractPID, err := context.SpawnNamed(actor.PropsFromProducer(func() actor.Actor {
 		return contractActor
 	}), contract.Address)
+	if err != nil {
+		context.Respond(&ContractDeployed{
+			Success: false,
+			Message: "Contract actor spawn failed",
+			Error:   err.Error(),
+		})
+		return
+	}
 
 	// Register the contract (manager stores immutable summary)
 	cma.activeContracts[contract.Address] = contractPID
@@ -490,8 +500,9 @@ func (cma *ContractManagerActor) handleDeployContract(context actor.Context, msg
 
 // Helper methods
 
-func (cma *ContractManagerActor) startBackgroundTasks(context actor.Context) {
-	self := context.Self()
+func (cma *ContractManagerActor) startBackgroundTasks(ctx actor.Context) {
+	self := ctx.Self()
+	root := ctx.ActorSystem().Root
 
 	// Start maintenance task ticker
 	go func() {
@@ -500,7 +511,7 @@ func (cma *ContractManagerActor) startBackgroundTasks(context actor.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				context.ActorSystem().Root.Send(self, &MaintenanceTick{})
+				root.Send(self, &MaintenanceTick{})
 			case <-cma.shutdownChan:
 				return
 			}
@@ -514,7 +525,7 @@ func (cma *ContractManagerActor) startBackgroundTasks(context actor.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				context.ActorSystem().Root.Send(self, &HealthTick{})
+				root.Send(self, &HealthTick{})
 			case <-cma.shutdownChan:
 				return
 			}
@@ -528,7 +539,7 @@ func (cma *ContractManagerActor) startBackgroundTasks(context actor.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				context.ActorSystem().Root.Send(self, &PerfTick{})
+				root.Send(self, &PerfTick{})
 			case <-cma.shutdownChan:
 				return
 			}
@@ -542,7 +553,7 @@ func (cma *ContractManagerActor) startBackgroundTasks(context actor.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				context.ActorSystem().Root.Send(self, &EcosystemTick{})
+				root.Send(self, &EcosystemTick{})
 			case <-cma.shutdownChan:
 				return
 			}
@@ -658,6 +669,15 @@ func (cma *ContractManagerActor) checkContractHealth()                          
 func (cma *ContractManagerActor) performSystemOptimization()                              {}
 func (cma *ContractManagerActor) cleanupInactiveContracts()                               {}
 func (cma *ContractManagerActor) updateCollaborationNetwork()                             {}
+
+// handleContractStatusUpdate updates contract status in manager's summary
+func (cma *ContractManagerActor) handleContractStatusUpdate(msg *ContractStatusUpdate) {
+	if c, ok := cma.contractDefinitions[msg.Address]; ok {
+		c.Status = msg.Status
+		c.UpdatedAt = msg.UpdatedAt
+		log.Printf("🔄 Updated contract %s status to %s", msg.Address, msg.Status)
+	}
+}
 
 // Actor-based task handlers (run on actor thread, not in goroutines)
 func (cma *ContractManagerActor) performHealthMonitoring() {
