@@ -12,6 +12,10 @@ import (
 
 // ContractRuntime provides native Go plugin execution for smart contracts
 // This eliminates VM overhead and runs at native CPU speed
+//
+// NOTE: ContractRuntime is expected to be used from a single Proto.Actor mailbox,
+// so Execute is not called concurrently. If this changes, GasTracker and
+// ExecutionSandbox must become per-execution instances or be synchronized.
 type ContractRuntime struct {
 	contract     *Contract
 	plugin       *plugin.Plugin
@@ -20,32 +24,32 @@ type ContractRuntime struct {
 	sandbox      *ExecutionSandbox
 	jitOptimizer *JITOptimizer
 	mutex        sync.RWMutex
-	
+
 	// Performance monitoring
-	executionStats   map[string]*FunctionStats
-	hotPaths        []string
-	optimizedPaths  map[string]reflect.Value
+	executionStats map[string]*FunctionStats
+	hotPaths       []string
+	optimizedPaths map[string]reflect.Value
 }
 
 // FunctionStats tracks performance metrics for contract functions
 type FunctionStats struct {
-	CallCount      int64
-	TotalGasUsed   int64
-	TotalTime      time.Duration
-	AverageGas     int64
-	AverageTime    time.Duration
-	ErrorCount     int64
-	LastOptimized  time.Time
+	CallCount     int64
+	TotalGasUsed  int64
+	TotalTime     time.Duration
+	AverageGas    int64
+	AverageTime   time.Duration
+	ErrorCount    int64
+	LastOptimized time.Time
 }
 
 // GasTracker monitors resource usage during contract execution
 type GasTracker struct {
-	limit       int64
-	used        int64
-	startTime   time.Time
-	cpuTime     time.Duration
-	memoryUsed  int64
-	operations  int64
+	limit      int64
+	used       int64
+	startTime  time.Time
+	cpuTime    time.Duration
+	memoryUsed int64
+	operations int64
 }
 
 // ExecutionSandbox provides security isolation for contract execution
@@ -55,17 +59,17 @@ type ExecutionSandbox struct {
 	cpuLimit       time.Duration
 	stackLimit     int
 	goroutineLimit int
-	
+
 	// Resource monitoring
 	activeGoroutines int
-	stackDepth      int
-	memoryUsage     int64
-	startTime       time.Time
+	stackDepth       int
+	memoryUsage      int64
+	startTime        time.Time
 }
 
 // JITOptimizer performs just-in-time compilation optimization
 type JITOptimizer struct {
-	hotThreshold    int64  // Execution count threshold for optimization
+	hotThreshold    int64 // Execution count threshold for optimization
 	optimizedFuncs  map[string]reflect.Value
 	compiledCache   map[string]*CompiledFunction
 	optimizationLog []OptimizationEvent
@@ -81,10 +85,10 @@ type CompiledFunction struct {
 
 // PerformanceMetrics tracks optimization performance
 type PerformanceMetrics struct {
-	SpeedupFactor   float64
-	GasReduction    float64
-	CompileTime     time.Duration
-	OptimizedCalls  int64
+	SpeedupFactor  float64
+	GasReduction   float64
+	CompileTime    time.Duration
+	OptimizedCalls int64
 }
 
 // OptimizationEvent tracks optimization history
@@ -99,25 +103,25 @@ type OptimizationEvent struct {
 type OptimizationType string
 
 const (
-	OptimizationTypeHotPath      OptimizationType = "hot_path"
-	OptimizationTypeInlining     OptimizationType = "inlining"
-	OptimizationTypeLoopUnroll   OptimizationType = "loop_unroll"
-	OptimizationTypeConstFold    OptimizationType = "const_fold"
-	OptimizationTypeDeadCode     OptimizationType = "dead_code"
-	OptimizationTypeVectorize    OptimizationType = "vectorize"
+	OptimizationTypeHotPath    OptimizationType = "hot_path"
+	OptimizationTypeInlining   OptimizationType = "inlining"
+	OptimizationTypeLoopUnroll OptimizationType = "loop_unroll"
+	OptimizationTypeConstFold  OptimizationType = "const_fold"
+	OptimizationTypeDeadCode   OptimizationType = "dead_code"
+	OptimizationTypeVectorize  OptimizationType = "vectorize"
 )
 
 // NewContractRuntime creates a new contract runtime engine
 func NewContractRuntime(contract *Contract) *ContractRuntime {
 	return &ContractRuntime{
-		contract:        contract,
-		functions:       make(map[string]reflect.Value),
-		gasTracker:      NewGasTracker(),
-		sandbox:         NewExecutionSandbox(),
-		jitOptimizer:    NewJITOptimizer(),
-		executionStats:  make(map[string]*FunctionStats),
-		hotPaths:        make([]string, 0),
-		optimizedPaths:  make(map[string]reflect.Value),
+		contract:       contract,
+		functions:      make(map[string]reflect.Value),
+		gasTracker:     NewGasTracker(),
+		sandbox:        NewExecutionSandbox(),
+		jitOptimizer:   NewJITOptimizer(),
+		executionStats: make(map[string]*FunctionStats),
+		hotPaths:       make([]string, 0),
+		optimizedPaths: make(map[string]reflect.Value),
 	}
 }
 
@@ -125,21 +129,21 @@ func NewContractRuntime(contract *Contract) *ContractRuntime {
 func (cr *ContractRuntime) LoadContract(pluginPath string) error {
 	cr.mutex.Lock()
 	defer cr.mutex.Unlock()
-	
+
 	// Load the Go plugin
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		return fmt.Errorf("failed to load plugin: %w", err)
 	}
-	
+
 	cr.plugin = p
-	
+
 	// Extract contract functions
 	err = cr.extractFunctions()
 	if err != nil {
 		return fmt.Errorf("failed to extract functions: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -148,11 +152,11 @@ func (cr *ContractRuntime) Execute(functionName string, params json.RawMessage, 
 	cr.mutex.RLock()
 	function, exists := cr.functions[functionName]
 	cr.mutex.RUnlock()
-	
+
 	if !exists {
 		return nil, nil, nil, 0, fmt.Errorf("function %s not found", functionName)
 	}
-	
+
 	// Initialize execution context
 	ctx := &ExecutionContext{
 		FunctionName: functionName,
@@ -164,13 +168,13 @@ func (cr *ContractRuntime) Execute(functionName string, params json.RawMessage, 
 		StateChanges: make([]StateChange, 0),
 		StartTime:    time.Now(),
 	}
-	
+
 	// Start gas tracking
 	cr.gasTracker.Start(gasLimit)
-	
+
 	// Start sandbox monitoring
 	cr.sandbox.Start()
-	
+
 	// Check if function should be optimized
 	stats := cr.getOrCreateFunctionStats(functionName)
 	if cr.shouldOptimize(functionName, stats) {
@@ -178,26 +182,31 @@ func (cr *ContractRuntime) Execute(functionName string, params json.RawMessage, 
 		if err == nil {
 			function = optimizedFunc
 			cr.optimizedPaths[functionName] = optimizedFunc
+
+			// Mark optimization time
+			cr.mutex.Lock()
+			stats.LastOptimized = time.Now()
+			cr.mutex.Unlock()
 		}
 	}
-	
+
 	// Execute the function
 	result, err := cr.executeFunction(function, ctx)
-	
+
 	// Stop monitoring
 	gasUsed := cr.gasTracker.Stop()
 	execTime := cr.sandbox.Stop()
-	
+
 	// Update statistics
 	cr.updateFunctionStats(functionName, gasUsed, execTime, err == nil)
-	
+
 	// Check for hot path optimization
 	cr.checkHotPathOptimization(functionName, stats)
-	
+
 	if err != nil {
 		return nil, nil, nil, gasUsed, err
 	}
-	
+
 	return result, ctx.Events, ctx.StateChanges, gasUsed, nil
 }
 
@@ -211,11 +220,11 @@ type ExecutionContext struct {
 	Events       []ContractEvent
 	StateChanges []StateChange
 	StartTime    time.Time
-	
+
 	// Runtime state
-	gasUsed      int64
-	timeElapsed  time.Duration
-	stackDepth   int
+	gasUsed     int64
+	timeElapsed time.Duration
+	stackDepth  int
 }
 
 // executeFunction performs the actual function execution with safety checks
@@ -225,32 +234,32 @@ func (cr *ContractRuntime) executeFunction(function reflect.Value, ctx *Executio
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare arguments: %w", err)
 	}
-	
+
 	// Execute with panic recovery
 	var result []reflect.Value
 	var execErr error
-	
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				execErr = fmt.Errorf("contract execution panicked: %v", r)
 			}
 		}()
-		
+
 		// Check sandbox limits before execution
 		if !cr.sandbox.CheckLimits() {
 			execErr = errors.New("sandbox limits exceeded")
 			return
 		}
-		
+
 		// Execute the function
 		result = function.Call(args)
 	}()
-	
+
 	if execErr != nil {
 		return nil, execErr
 	}
-	
+
 	// Process function results
 	return cr.processFunctionResult(result, ctx)
 }
@@ -259,31 +268,11 @@ func (cr *ContractRuntime) executeFunction(function reflect.Value, ctx *Executio
 func (cr *ContractRuntime) prepareFunctionArgs(function reflect.Value, ctx *ExecutionContext) ([]reflect.Value, error) {
 	funcType := function.Type()
 	numArgs := funcType.NumIn()
-	
-	args := make([]reflect.Value, numArgs)
-	
-	// First argument is always the execution context
-	args[0] = reflect.ValueOf(ctx)
-	
-	// Parse JSON parameters for remaining arguments
-	if numArgs > 1 && len(ctx.Parameters) > 0 {
-		var params []interface{}
-		err := json.Unmarshal(ctx.Parameters, &params)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse parameters: %w", err)
-		}
-		
-		for i := 1; i < numArgs && i-1 < len(params); i++ {
-			argType := funcType.In(i)
-			argValue, err := cr.convertToType(params[i-1], argType)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert parameter %d: %w", i, err)
-			}
-			args[i] = argValue
-		}
+
+	if numArgs != 1 || funcType.In(0) != reflect.TypeOf(&ExecutionContext{}) {
+		return nil, fmt.Errorf("invalid contract function signature: %v", funcType)
 	}
-	
-	return args, nil
+	return []reflect.Value{reflect.ValueOf(ctx)}, nil
 }
 
 // processFunctionResult processes function return values
@@ -291,76 +280,78 @@ func (cr *ContractRuntime) processFunctionResult(result []reflect.Value, ctx *Ex
 	if len(result) == 0 {
 		return nil, nil
 	}
-	
-	// First return value is the result
-	resultInterface := result[0].Interface()
-	
-	// Check if there's an error (last return value)
+
+	// Check if last return value is an error
 	if len(result) > 1 {
-		if errVal := result[len(result)-1]; !errVal.IsNil() {
-			if err, ok := errVal.Interface().(error); ok {
-				return nil, err
+		last := result[len(result)-1]
+		if last.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+			if !last.IsNil() {
+				if err, ok := last.Interface().(error); ok {
+					return nil, err
+				}
 			}
+			// If it's an error type, don't include it in the JSON result
+			result = result[:len(result)-1]
 		}
 	}
-	
-	// Convert result to JSON
+
+	// First non-error return is the "payload"
+	resultInterface := result[0].Interface()
+
 	resultJSON, err := json.Marshal(resultInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal result: %w", err)
 	}
-	
+
 	return resultJSON, nil
 }
 
 // convertToType converts an interface{} to the specified reflect.Type
 func (cr *ContractRuntime) convertToType(value interface{}, targetType reflect.Type) (reflect.Value, error) {
 	valueReflect := reflect.ValueOf(value)
-	
+
 	// Handle type conversions
 	if valueReflect.Type().ConvertibleTo(targetType) {
 		return valueReflect.Convert(targetType), nil
 	}
-	
+
 	// Handle JSON marshaling/unmarshaling for complex types
 	if targetType.Kind() == reflect.Struct || targetType.Kind() == reflect.Slice || targetType.Kind() == reflect.Map {
 		jsonData, err := json.Marshal(value)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-		
+
 		newValue := reflect.New(targetType)
 		err = json.Unmarshal(jsonData, newValue.Interface())
 		if err != nil {
 			return reflect.Value{}, err
 		}
-		
+
 		return newValue.Elem(), nil
 	}
-	
+
 	return reflect.Value{}, fmt.Errorf("cannot convert %T to %v", value, targetType)
 }
 
 // extractFunctions discovers and caches contract functions from the plugin
 func (cr *ContractRuntime) extractFunctions() error {
-	// Look for exported contract functions
-	// Convention: functions starting with "Contract" are contract methods
-	
-	// For now, we'll use a simple reflection approach
-	// In a production system, this would be more sophisticated
-	
-	// Example: look for specific function names or use interface discovery
+	// Discover exported functions by name convention
 	functions := []string{"Initialize", "Transfer", "GetBalance", "SetData", "GetData"}
-	
+
 	for _, funcName := range functions {
 		sym, err := cr.plugin.Lookup(funcName)
-		if err == nil {
-			if fn, ok := sym.(func(*ExecutionContext, ...interface{}) (interface{}, error)); ok {
-				cr.functions[funcName] = reflect.ValueOf(fn)
-			}
+		if err != nil {
+			continue
 		}
+
+		fn, ok := sym.(func(*ExecutionContext) (interface{}, error))
+		if !ok {
+			continue
+		}
+
+		cr.functions[funcName] = reflect.ValueOf(fn)
 	}
-	
 	return nil
 }
 
@@ -384,11 +375,11 @@ func (gt *GasTracker) Stop() int64 {
 func (gt *GasTracker) UseGas(amount int64) error {
 	gt.used += amount
 	gt.operations++
-	
+
 	if gt.used > gt.limit {
 		return errors.New("gas limit exceeded")
 	}
-	
+
 	return nil
 }
 
@@ -396,10 +387,10 @@ func (gt *GasTracker) UseGas(amount int64) error {
 func NewExecutionSandbox() *ExecutionSandbox {
 	return &ExecutionSandbox{
 		memoryLimit:    100 * 1024 * 1024, // 100MB
-		timeoutLimit:   30 * time.Second,   // 30 seconds
-		cpuLimit:       10 * time.Second,   // 10 seconds CPU time
-		stackLimit:     1000,               // 1000 stack frames
-		goroutineLimit: 10,                 // 10 goroutines max
+		timeoutLimit:   30 * time.Second,  // 30 seconds
+		cpuLimit:       10 * time.Second,  // 10 seconds CPU time
+		stackLimit:     1000,              // 1000 stack frames
+		goroutineLimit: 10,                // 10 goroutines max
 	}
 }
 
@@ -418,17 +409,17 @@ func (es *ExecutionSandbox) CheckLimits() bool {
 	if time.Since(es.startTime) > es.timeoutLimit {
 		return false
 	}
-	
+
 	// Check memory usage (simplified)
 	if es.memoryUsage > es.memoryLimit {
 		return false
 	}
-	
+
 	// Check stack depth
 	if es.stackDepth > es.stackLimit {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -449,7 +440,7 @@ func (jit *JITOptimizer) OptimizeFunction(name string, function reflect.Value) (
 	// 2. Apply optimizations (inlining, constant folding, etc.)
 	// 3. Generate optimized machine code
 	// 4. Return optimized function
-	
+
 	// For now, just return the original function
 	jit.optimizationLog = append(jit.optimizationLog, OptimizationEvent{
 		FunctionName: name,
@@ -458,44 +449,56 @@ func (jit *JITOptimizer) OptimizeFunction(name string, function reflect.Value) (
 		Improvement:  1.2, // 20% improvement
 		Success:      true,
 	})
-	
+
 	return function, nil
 }
 
 // Helper methods
 func (cr *ContractRuntime) getOrCreateFunctionStats(functionName string) *FunctionStats {
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+
+	return cr.getOrCreateFunctionStatsLocked(functionName)
+}
+
+func (cr *ContractRuntime) getOrCreateFunctionStatsLocked(functionName string) *FunctionStats {
 	if stats, exists := cr.executionStats[functionName]; exists {
 		return stats
 	}
-	
+
 	stats := &FunctionStats{}
 	cr.executionStats[functionName] = stats
 	return stats
 }
 
 func (cr *ContractRuntime) shouldOptimize(functionName string, stats *FunctionStats) bool {
-	return stats.CallCount >= cr.jitOptimizer.hotThreshold && 
-		   time.Since(stats.LastOptimized) > time.Hour
+	return stats.CallCount >= cr.jitOptimizer.hotThreshold &&
+		time.Since(stats.LastOptimized) > time.Hour
 }
 
 func (cr *ContractRuntime) updateFunctionStats(functionName string, gasUsed int64, execTime time.Duration, success bool) {
-	stats := cr.getOrCreateFunctionStats(functionName)
-	
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+
+	stats := cr.getOrCreateFunctionStatsLocked(functionName)
 	stats.CallCount++
 	stats.TotalGasUsed += gasUsed
 	stats.TotalTime += execTime
-	
+
 	if stats.CallCount > 0 {
 		stats.AverageGas = stats.TotalGasUsed / stats.CallCount
 		stats.AverageTime = stats.TotalTime / time.Duration(stats.CallCount)
 	}
-	
+
 	if !success {
 		stats.ErrorCount++
 	}
 }
 
 func (cr *ContractRuntime) checkHotPathOptimization(functionName string, stats *FunctionStats) {
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+
 	if stats.CallCount >= cr.jitOptimizer.hotThreshold {
 		// Add to hot paths for optimization
 		for _, path := range cr.hotPaths {
