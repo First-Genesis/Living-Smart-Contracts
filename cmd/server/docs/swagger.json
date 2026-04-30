@@ -1,0 +1,721 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/api/collaborations/propose": {
+            "post": {
+                "description": "Propose a collaboration between two contracts",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collaboration"
+                ],
+                "summary": "Propose Collaboration",
+                "parameters": [
+                    {
+                        "description": "Collaboration proposal request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.CollaborationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/main.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/contracts": {
+            "get": {
+                "description": "Get a list of all deployed smart contracts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "List Contracts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.ContractsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/contracts/deploy": {
+            "post": {
+                "description": "Deploy a new living smart contract",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Deploy Contract",
+                "parameters": [
+                    {
+                        "description": "Contract deployment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.DeployContractRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/main.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/contracts/execute": {
+            "post": {
+                "description": "Execute a function on a deployed smart contract",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Execute Contract",
+                "parameters": [
+                    {
+                        "description": "Contract execution request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.ExecuteContractRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/contracts/{address}": {
+            "get": {
+                "description": "Get detailed information about a specific contract",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Get Contract Details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Contract Address",
+                        "name": "address",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.Contract"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/evolution/trigger": {
+            "post": {
+                "description": "Trigger evolutionary process for a contract",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Evolution"
+                ],
+                "summary": "Trigger Evolution",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Contract Address",
+                        "name": "address",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Evolution request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.EvolutionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/info": {
+            "get": {
+                "description": "Get information about the Living Smart Contracts API",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "API Information",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.APIInfoResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Get the health status of the Living Smart Contracts service",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Health Check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.HealthResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.APIInfoResponse": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Revolutionary blockchain platform with evolutionary intelligence"
+                },
+                "endpoints": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Living Smart Contracts"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
+        "main.Collaboration": {
+            "type": "object",
+            "properties": {
+                "benefit_score": {
+                    "type": "number",
+                    "example": 0.18
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "collab_001"
+                },
+                "partner_address": {
+                    "type": "string",
+                    "example": "0x9876543210987654321098765432109876543210"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "resource_sharing"
+                }
+            }
+        },
+        "main.CollaborationRequest": {
+            "type": "object",
+            "required": [
+                "collaboration_type",
+                "proposer_address",
+                "target_address",
+                "terms"
+            ],
+            "properties": {
+                "collaboration_type": {
+                    "type": "string",
+                    "example": "resource_sharing"
+                },
+                "expected_benefit": {
+                    "type": "number",
+                    "example": 0.25
+                },
+                "proposer_address": {
+                    "type": "string",
+                    "example": "0xabcdef1234567890abcdef1234567890abcdef12"
+                },
+                "target_address": {
+                    "type": "string",
+                    "example": "0x9876543210987654321098765432109876543210"
+                },
+                "terms": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "main.Contract": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "example": "0xabcdef1234567890abcdef1234567890abcdef12"
+                },
+                "collaborations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.Collaboration"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "dna": {
+                    "$ref": "#/definitions/main.ContractDNA"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "memory": {
+                    "$ref": "#/definitions/main.ContractMemory"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "adaptive_trading_contract"
+                },
+                "owner": {
+                    "type": "string",
+                    "example": "0x1234567890123456789012345678901234567890"
+                },
+                "performance_metrics": {
+                    "$ref": "#/definitions/main.PerformanceMetrics"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "living"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
+        "main.ContractDNA": {
+            "type": "object",
+            "properties": {
+                "fitness": {
+                    "type": "number",
+                    "example": 0.934
+                },
+                "generation": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "genes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.Gene"
+                    }
+                },
+                "mutations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parents": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "main.ContractMemory": {
+            "type": "object",
+            "properties": {
+                "experiences": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.Experience"
+                    }
+                },
+                "long_term": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "patterns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.MemoryPattern"
+                    }
+                },
+                "short_term": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "main.ContractsResponse": {
+            "type": "object",
+            "properties": {
+                "contracts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.Contract"
+                    }
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Living Smart Contracts API"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "ready"
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "main.DeployContractRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "owner",
+                "source_code",
+                "type"
+            ],
+            "properties": {
+                "history_depth": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "init_params": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "example": "adaptive_trading_contract"
+                },
+                "owner": {
+                    "type": "string",
+                    "example": "0x1234567890123456789012345678901234567890"
+                },
+                "source_code": {
+                    "type": "string",
+                    "example": "contract AdaptiveTrader { ... }"
+                },
+                "time_aware": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "type": {
+                    "type": "string",
+                    "example": "living"
+                }
+            }
+        },
+        "main.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 400
+                },
+                "error": {
+                    "type": "string",
+                    "example": "Invalid request"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "The provided parameters are invalid"
+                }
+            }
+        },
+        "main.EvolutionRequest": {
+            "type": "object",
+            "required": [
+                "evolution_type"
+            ],
+            "properties": {
+                "evolution_type": {
+                    "type": "string",
+                    "example": "optimization"
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "main.ExecuteContractRequest": {
+            "type": "object",
+            "required": [
+                "caller",
+                "contract_address",
+                "function",
+                "parameters"
+            ],
+            "properties": {
+                "caller": {
+                    "type": "string",
+                    "example": "0x1234567890123456789012345678901234567890"
+                },
+                "contract_address": {
+                    "type": "string",
+                    "example": "0xabcdef1234567890abcdef1234567890abcdef12"
+                },
+                "function": {
+                    "type": "string",
+                    "example": "trade"
+                },
+                "gas_limit": {
+                    "type": "integer",
+                    "example": 500000
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "main.Experience": {
+            "type": "object",
+            "properties": {
+                "context": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "learning": {
+                    "type": "string"
+                },
+                "outcome": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.Gene": {
+            "type": "object",
+            "properties": {
+                "dominance": {
+                    "type": "number",
+                    "example": 0.92
+                },
+                "expression": {
+                    "type": "string",
+                    "example": "performance_boost"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "optimization_001"
+                },
+                "stability": {
+                    "type": "number",
+                    "example": 0.88
+                },
+                "type": {
+                    "type": "string",
+                    "example": "optimization"
+                }
+            }
+        },
+        "main.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "example": "living-smart-contracts"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "healthy"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2026-04-30T20:08:31Z"
+                }
+            }
+        },
+        "main.MemoryPattern": {
+            "type": "object",
+            "properties": {
+                "confidence": {
+                    "type": "number",
+                    "example": 0.95
+                },
+                "id": {
+                    "type": "string",
+                    "example": "pattern_001"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "execution"
+                },
+                "usage": {
+                    "type": "integer",
+                    "example": 1250
+                }
+            }
+        },
+        "main.PerformanceMetrics": {
+            "type": "object",
+            "properties": {
+                "adaptation_score": {
+                    "type": "number",
+                    "example": 0.923
+                },
+                "average_gas_used": {
+                    "type": "integer",
+                    "example": 45000
+                },
+                "execution_count": {
+                    "type": "integer",
+                    "example": 15420
+                },
+                "last_optimized": {
+                    "type": "string"
+                },
+                "success_rate": {
+                    "type": "number",
+                    "example": 0.987
+                }
+            }
+        },
+        "main.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string",
+                    "example": "Operation completed successfully"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,494 @@
+definitions:
+  main.APIInfoResponse:
+    properties:
+      description:
+        example: Revolutionary blockchain platform with evolutionary intelligence
+        type: string
+      endpoints:
+        additionalProperties:
+          type: string
+        type: object
+      features:
+        items:
+          type: string
+        type: array
+      name:
+        example: Living Smart Contracts
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  main.Collaboration:
+    properties:
+      benefit_score:
+        example: 0.18
+        type: number
+      created_at:
+        type: string
+      id:
+        example: collab_001
+        type: string
+      partner_address:
+        example: 0x9876543210987654321098765432109876543210
+        type: string
+      status:
+        example: active
+        type: string
+      type:
+        example: resource_sharing
+        type: string
+    type: object
+  main.CollaborationRequest:
+    properties:
+      collaboration_type:
+        example: resource_sharing
+        type: string
+      expected_benefit:
+        example: 0.25
+        type: number
+      proposer_address:
+        example: 0xabcdef1234567890abcdef1234567890abcdef12
+        type: string
+      target_address:
+        example: 0x9876543210987654321098765432109876543210
+        type: string
+      terms:
+        additionalProperties: true
+        type: object
+    required:
+    - collaboration_type
+    - proposer_address
+    - target_address
+    - terms
+    type: object
+  main.Contract:
+    properties:
+      address:
+        example: 0xabcdef1234567890abcdef1234567890abcdef12
+        type: string
+      collaborations:
+        items:
+          $ref: '#/definitions/main.Collaboration'
+        type: array
+      created_at:
+        type: string
+      dna:
+        $ref: '#/definitions/main.ContractDNA'
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      memory:
+        $ref: '#/definitions/main.ContractMemory'
+      name:
+        example: adaptive_trading_contract
+        type: string
+      owner:
+        example: 0x1234567890123456789012345678901234567890
+        type: string
+      performance_metrics:
+        $ref: '#/definitions/main.PerformanceMetrics'
+      status:
+        example: active
+        type: string
+      type:
+        example: living
+        type: string
+      updated_at:
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  main.ContractDNA:
+    properties:
+      fitness:
+        example: 0.934
+        type: number
+      generation:
+        example: 5
+        type: integer
+      genes:
+        items:
+          $ref: '#/definitions/main.Gene'
+        type: array
+      mutations:
+        items:
+          type: string
+        type: array
+      parents:
+        items:
+          type: string
+        type: array
+    type: object
+  main.ContractMemory:
+    properties:
+      experiences:
+        items:
+          $ref: '#/definitions/main.Experience'
+        type: array
+      long_term:
+        additionalProperties: true
+        type: object
+      patterns:
+        items:
+          $ref: '#/definitions/main.MemoryPattern'
+        type: array
+      short_term:
+        additionalProperties: true
+        type: object
+    type: object
+  main.ContractsResponse:
+    properties:
+      contracts:
+        items:
+          $ref: '#/definitions/main.Contract'
+        type: array
+      message:
+        example: Living Smart Contracts API
+        type: string
+      status:
+        example: ready
+        type: string
+      total:
+        example: 0
+        type: integer
+    type: object
+  main.DeployContractRequest:
+    properties:
+      history_depth:
+        example: 1000
+        type: integer
+      init_params:
+        additionalProperties: true
+        type: object
+      name:
+        example: adaptive_trading_contract
+        type: string
+      owner:
+        example: 0x1234567890123456789012345678901234567890
+        type: string
+      source_code:
+        example: contract AdaptiveTrader { ... }
+        type: string
+      time_aware:
+        example: true
+        type: boolean
+      type:
+        example: living
+        type: string
+    required:
+    - name
+    - owner
+    - source_code
+    - type
+    type: object
+  main.ErrorResponse:
+    properties:
+      code:
+        example: 400
+        type: integer
+      error:
+        example: Invalid request
+        type: string
+      message:
+        example: The provided parameters are invalid
+        type: string
+    type: object
+  main.EvolutionRequest:
+    properties:
+      evolution_type:
+        example: optimization
+        type: string
+      parameters:
+        additionalProperties: true
+        type: object
+    required:
+    - evolution_type
+    type: object
+  main.ExecuteContractRequest:
+    properties:
+      caller:
+        example: 0x1234567890123456789012345678901234567890
+        type: string
+      contract_address:
+        example: 0xabcdef1234567890abcdef1234567890abcdef12
+        type: string
+      function:
+        example: trade
+        type: string
+      gas_limit:
+        example: 500000
+        type: integer
+      parameters:
+        additionalProperties: true
+        type: object
+    required:
+    - caller
+    - contract_address
+    - function
+    - parameters
+    type: object
+  main.Experience:
+    properties:
+      context:
+        additionalProperties: true
+        type: object
+      id:
+        type: string
+      learning:
+        type: string
+      outcome:
+        type: string
+      timestamp:
+        type: string
+      type:
+        type: string
+    type: object
+  main.Gene:
+    properties:
+      dominance:
+        example: 0.92
+        type: number
+      expression:
+        example: performance_boost
+        type: string
+      id:
+        example: optimization_001
+        type: string
+      stability:
+        example: 0.88
+        type: number
+      type:
+        example: optimization
+        type: string
+    type: object
+  main.HealthResponse:
+    properties:
+      service:
+        example: living-smart-contracts
+        type: string
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2026-04-30T20:08:31Z"
+        type: string
+    type: object
+  main.MemoryPattern:
+    properties:
+      confidence:
+        example: 0.95
+        type: number
+      id:
+        example: pattern_001
+        type: string
+      type:
+        example: execution
+        type: string
+      usage:
+        example: 1250
+        type: integer
+    type: object
+  main.PerformanceMetrics:
+    properties:
+      adaptation_score:
+        example: 0.923
+        type: number
+      average_gas_used:
+        example: 45000
+        type: integer
+      execution_count:
+        example: 15420
+        type: integer
+      last_optimized:
+        type: string
+      success_rate:
+        example: 0.987
+        type: number
+    type: object
+  main.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        example: Operation completed successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /api/collaborations/propose:
+    post:
+      consumes:
+      - application/json
+      description: Propose a collaboration between two contracts
+      parameters:
+      - description: Collaboration proposal request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/main.CollaborationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Propose Collaboration
+      tags:
+      - Collaboration
+  /api/contracts:
+    get:
+      description: Get a list of all deployed smart contracts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.ContractsResponse'
+      summary: List Contracts
+      tags:
+      - Contracts
+  /api/contracts/{address}:
+    get:
+      description: Get detailed information about a specific contract
+      parameters:
+      - description: Contract Address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Contract'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Get Contract Details
+      tags:
+      - Contracts
+  /api/contracts/deploy:
+    post:
+      consumes:
+      - application/json
+      description: Deploy a new living smart contract
+      parameters:
+      - description: Contract deployment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/main.DeployContractRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Deploy Contract
+      tags:
+      - Contracts
+  /api/contracts/execute:
+    post:
+      consumes:
+      - application/json
+      description: Execute a function on a deployed smart contract
+      parameters:
+      - description: Contract execution request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/main.ExecuteContractRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Execute Contract
+      tags:
+      - Contracts
+  /api/evolution/trigger:
+    post:
+      consumes:
+      - application/json
+      description: Trigger evolutionary process for a contract
+      parameters:
+      - description: Contract Address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Evolution request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/main.EvolutionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Trigger Evolution
+      tags:
+      - Evolution
+  /api/info:
+    get:
+      description: Get information about the Living Smart Contracts API
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.APIInfoResponse'
+      summary: API Information
+      tags:
+      - Health
+  /health:
+    get:
+      description: Get the health status of the Living Smart Contracts service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.HealthResponse'
+      summary: Health Check
+      tags:
+      - Health
+swagger: "2.0"

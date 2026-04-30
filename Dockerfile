@@ -13,17 +13,17 @@ COPY go.mod ./
 # Download dependencies (if any)
 RUN go mod download
 
-# Copy source code
+# Copy source code (includes Swagger docs)
 COPY . .
 
-# Build the application
+# Build the application with Swagger documentation
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o living-contracts ./cmd/server
 
 # Final stage - minimal runtime image
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata wget
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \

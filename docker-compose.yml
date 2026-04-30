@@ -4,7 +4,7 @@ services:
   living-contracts:
     build: .
     ports:
-      - "8080:8080"
+      - "8080:8080"  # API and Swagger UI port
       - "9090:9090"  # Metrics port
     environment:
       - LOG_LEVEL=info

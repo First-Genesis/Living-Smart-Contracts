@@ -47,6 +47,7 @@ docker run -d \
 After starting with docker-compose, the following services will be available:
 
 - **Living Smart Contracts API**: http://localhost:8080
+  - **Swagger UI**: http://localhost:8080/swagger/ (Interactive API Documentation)
   - Health check: http://localhost:8080/health
   - API info: http://localhost:8080/api/info
   - Contracts API: http://localhost:8080/api/contracts
